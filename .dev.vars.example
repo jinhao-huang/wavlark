@@ -1,0 +1,5 @@
+# Wrangler's local S3 endpoint, relative to the development server.
+R2_ENDPOINT=/cdn-cgi/local/r2/s3/
+R2_BUCKET_NAME=wavlark-files
+R2_ACCESS_KEY_ID=local-access-key
+R2_SECRET_ACCESS_KEY=local-secret-key

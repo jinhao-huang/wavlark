@@ -1,35 +1,53 @@
-<svelte:head>
-  <title>Wavlark · Public file library</title>
-</svelte:head>
+<script>
+  import Button from '#lib/components/ui/button/button.svelte';
+  import { formatDate, formatSize } from '#lib/catalog.js';
+  let { data } = $props();
+</script>
 
-<main>
-  <h1>Wavlark</h1>
-  <p>Public file library</p>
-</main>
+<svelte:head><title>Public files · Wavlark</title></svelte:head>
+
+<h1>Public files</h1>
+{#if data.resources.length}
+  <table class="mt-10 w-full text-left">
+    <thead class="border-b border-line text-sm muted">
+      <tr><th scope="col">File name</th><th scope="col">Size</th><th scope="col">Published</th></tr>
+    </thead>
+    <tbody>
+      {#each data.resources as file (file.id)}
+        <tr class="border-b border-line">
+          <td><a class="font-semibold text-primary hover:underline" href={'/resources/' + encodeURIComponent(file.id)}>{file.name}</a></td>
+          <td>{formatSize(file.size_bytes)}</td>
+          <td>{formatDate(file.published_at)}</td>
+        </tr>
+      {/each}
+    </tbody>
+  </table>
+{:else}
+  <p class="mt-10 border-y border-line py-8 muted">
+    {data.page === 1 ? 'No public files yet.' : 'No files on this page.'}
+  </p>
+{/if}
+
+{#if data.page > 1 || data.has_next}
+  <nav aria-label="Catalog pages" class="mt-6 flex flex-wrap items-center gap-4">
+    {#if data.page > 1}
+      <Button variant="outline" href={data.page === 2 ? '/' : '/?page=' + (data.page - 1)}>Previous</Button>
+    {/if}
+    <span class="text-sm muted" aria-current="page">Page {data.page}</span>
+    {#if data.has_next}
+      <Button variant="outline" href={'/?page=' + (data.page + 1)}>Next</Button>
+    {/if}
+  </nav>
+{/if}
 
 <style>
-  :global(body) {
-    margin: 0;
-    background: #f8f8f5;
-    color: #202520;
-    font-family: system-ui, sans-serif;
-  }
-
-  main {
-    max-width: 64rem;
-    margin: auto;
-    padding: clamp(3rem, 10vw, 8rem) 1.5rem;
-  }
-
-  h1 {
-    margin: 0;
-    font-size: clamp(3rem, 9vw, 6rem);
-    line-height: 1;
-    letter-spacing: -0.06em;
-  }
-
-  p {
-    margin-top: 1rem;
-    color: #535c52;
+  th { padding-bottom: .65rem; font-weight: 500; }
+  td { padding-block: 1.05rem; }
+  td:first-child { width: 60%; overflow-wrap: anywhere; }
+  :is(th, td):not(:last-child) { padding-right: 1rem; }
+  td:not(:first-child) { font-size: .875rem; font-variant-numeric: tabular-nums; }
+  @media (max-width: 36rem) {
+    td:first-child { width: 45%; }
+    :is(th, td):not(:last-child) { padding-right: .6rem; }
   }
 </style>

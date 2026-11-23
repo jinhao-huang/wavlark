@@ -2,6 +2,9 @@
   "name": "@wavlark/web",
   "private": true,
   "type": "module",
+  "imports": {
+    "#lib/*": "./src/lib/*"
+  },
   "scripts": {
     "build": "vite build"
   },
@@ -9,8 +12,11 @@
     "@sveltejs/adapter-static": "^4.0.1",
     "@sveltejs/kit": "^3.4.0",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@tailwindcss/vite": "^4.3.5",
     "@types/node": "^24.19.2",
     "svelte": "^5.59.1",
+    "tailwind-variants": "^4.0.2",
+    "tailwindcss": "^4.3.5",
     "vite": "^8.3.8"
   }
 }

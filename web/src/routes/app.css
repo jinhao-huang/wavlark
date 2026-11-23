@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #244f83;
+  --color-line: #c9d2d9;
+}
+
+:root {
+  font-family: "Helvetica Neue", system-ui, sans-serif;
+  color: #1d2d39;
+  background: #f7f9fa;
+}
+
+:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 4px; }
+.masthead, main { width: min(58rem, calc(100% - 2.5rem)); margin-inline: auto; }
+.masthead { padding-block: 1.5rem; border-bottom: 1px solid var(--color-line); }
+.brand { font-size: 1.4rem; font-weight: 750; letter-spacing: -.055em; }
+main { padding-block: clamp(2.75rem, 7vw, 5rem); }
+h1 { font-size: clamp(2.5rem, 6vw, 4.25rem); line-height: 1.06; font-weight: 630; letter-spacing: -.052em; overflow-wrap: anywhere; }
+.muted { color: #506371; }
+.text-link { color: var(--color-primary); text-decoration: underline; text-underline-offset: .2em; }

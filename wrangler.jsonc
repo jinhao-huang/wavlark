@@ -4,8 +4,25 @@
   "main": "worker/build/index.js",
   "compatibility_date": "2026-11-19",
   "assets": {
-    "directory": "./web/build"
+    "directory": "./web/build",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/download/*"]
   },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "wavlark" }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "wavlark-files",
+      "local_dev": {
+        "experimental_s3_credentials": {
+          "accessKeyId": "local-access-key",
+          "secretAccessKey": "local-secret-key"
+        }
+      }
+    }
+  ],
   "build": {
     "command": "pnpm --dir web run build && cd worker && worker-build --release",
     "watch_dir": ["web/src", "worker/src"]
