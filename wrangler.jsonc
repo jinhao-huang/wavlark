@@ -7,7 +7,7 @@
     "directory": "./web/build"
   },
   "build": {
-    "command": "npm run build --workspace web && cd worker && worker-build --release",
+    "command": "pnpm --dir web run build && cd worker && worker-build --release",
     "watch_dir": ["web/src", "worker/src"]
   }
 }

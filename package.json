@@ -1,9 +1,6 @@
 {
   "name": "wavlark",
   "private": true,
-  "workspaces": [
-    "web"
-  ],
   "scripts": {
     "dev": "wrangler dev",
     "build": "wrangler deploy --dry-run"
