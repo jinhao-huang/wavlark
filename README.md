@@ -1,5 +1,7 @@
 # Wavlark
 
+[简体中文](README.zh-CN.md)
+
 Wavlark is a public file library. The SvelteKit Worker in `web/` (`wavlark`)
 renders the catalog. Its `API` service binding calls the Rust Worker in
 `worker/` (`wavlark-api`) for metadata and signed downloads.
@@ -27,6 +29,10 @@ Open the URL printed by Vite. The catalog and signed downloads share this
 address. Vite starts on port 5173 and tries the next available port if it's
 busy. To choose a different starting port, run `mise run dev --port 5200`.
 
+To work as a publisher, start `mise run dev:publisher` and open **Publisher
+workspace**. It signs you in locally as `publisher@example.com` without a
+Cloudflare account. Use `mise run dev` for the signed-out view.
+
 Setup initializes `worker/.dev.vars` for the R2 emulator and applies the
 local D1 migrations. Each checkout keeps its D1 and R2 data in
 `.wrangler/state`. A fresh catalog is empty. `GET /api/health` returns
@@ -45,11 +51,11 @@ mise run wrangler:local d1 execute DB \
   --command "INSERT OR REPLACE INTO resources (id, name, size_bytes, published_at) VALUES ('hello', 'hello.txt', 6, unixepoch())"
 ```
 
-Refresh the home page and open **hello.txt**. The resource ID doubles as its
-object key. R2's `Content-Disposition` supplies the download filename. A null
-`published_at` keeps the resource out of the catalog and disables its
-`/download/<id>` link. For a published file, that link redirects to a
-five-minute signed R2 URL.
+Refresh the home page, open **hello.txt**, and select **Download file**.
+The resource ID doubles as its object key. R2's `Content-Disposition` supplies
+the download filename. A null `published_at` keeps the resource out of the
+catalog and disables its `/download/<id>` link. For a published file, that link
+redirects to a five-minute signed R2 URL.
 
 For the deployed Rust Worker, configure `R2_ENDPOINT` with the account's absolute R2
 S3 endpoint and `R2_BUCKET_NAME` with the private bucket name. Store the
