@@ -80,3 +80,40 @@ pub async fn create(mut req: Request, ctx: RouteContext<Publisher>) -> Result<Re
             .with_status(201),
     )
 }
+
+#[derive(Deserialize)]
+struct Publication {
+    size_bytes: u64,
+    published_at: Option<i64>,
+}
+
+pub async fn publish(_req: Request, ctx: RouteContext<Publisher>) -> Result<Response> {
+    let id = ctx.param("id").expect("resource route has an id");
+    let db = ctx.d1("DB")?;
+    let resource_and_owner = [id.as_str().into(), ctx.data.id.as_str().into()];
+    let record = db
+        .prepare("SELECT size_bytes, published_at FROM resources WHERE id = ? AND publisher_id = ?")
+        .bind(&resource_and_owner)?
+        .first::<Publication>(None)
+        .await?;
+    let Some(record) = record else {
+        return Response::error("File not found.", 404);
+    };
+    if record.published_at.is_none() {
+        let object = ctx.bucket("FILES")?.head(id).await?;
+        if !object.is_some_and(|file| file.size() == record.size_bytes) {
+            return Response::error(
+                "The uploaded file is missing or its size does not match.",
+                409,
+            );
+        }
+        db.prepare(
+            "UPDATE resources SET published_at = unixepoch()
+                    WHERE id = ? AND publisher_id = ? AND published_at IS NULL",
+        )
+        .bind(&resource_and_owner)?
+        .run()
+        .await?;
+    }
+    Ok(Response::empty()?.with_status(204))
+}

@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Wavlark 是一个公共文件分享站。`web/` 下的 SvelteKit Worker（`wavlark`）负责展示资源目录，通过 `API` 服务绑定调用 `worker/` 下的 Rust Worker（`wavlark-api`），查询文件信息并生成下载链接。
+Wavlark 是一个公共文件分享站。`web/` 下的 SvelteKit Worker（`wavlark`）负责展示资源目录，通过 `API` 服务绑定调用 `worker/` 下的 Rust Worker（`wavlark-api`），处理发布请求、查询文件信息并生成上传和下载链接。
 
 ## 本地运行
 
@@ -29,20 +29,15 @@ mise run dev
 
 运行 `mise run build` 可在本机构建两个 Worker 并模拟部署。
 
-## 添加一个本地文件
+## 发布文件
 
-在仓库根目录运行以下命令，将示例文件写入本地 R2，并在 D1 中发布对应的资源记录。
+打开 **Publisher workspace**，选择一个不超过 100 MiB 的文件，按需填写说明，然后点击 **Upload file**。浏览器会将文件直接传入私有 R2 桶。点击 **Confirm publication** 后，访客就能在首页找到该文件。可以分享详情页链接，也可以点击 **Download file** 下载原文件。
 
-```sh
-printf 'Hello\n' | mise run wrangler:local r2 object put wavlark-files/hello --pipe \
-  --content-type text/plain --content-disposition 'attachment; filename="hello.txt"'
-mise run wrangler:local d1 execute DB \
-  --command "INSERT OR REPLACE INTO resources (id, name, size_bytes, published_at) VALUES ('hello', 'hello.txt', 6, unixepoch())"
-```
+## 生产环境存储配置
 
-刷新首页，打开 **hello.txt**，在详情页点击 **Download file**。资源 ID 同时用作 R2 对象的键，下载文件名取自 R2 的 `Content-Disposition`。当 `published_at` 为 `NULL` 时，目录会隐藏该资源，`/download/<id>` 也不可用。资源发布后，这个地址会跳转到有效期为五分钟的 R2 签名链接。
+在 Rust Worker 中，将 `R2_ENDPOINT` 设为当前账户的 R2 S3 完整地址，将 `R2_BUCKET_NAME` 设为私有桶名称。为签名凭据授予该桶的 **Object Read & Write** 权限，通过 Worker secrets 配置 `R2_ACCESS_KEY_ID` 和 `R2_SECRET_ACCESS_KEY`。
 
-部署 Rust Worker 时，将 `R2_ENDPOINT` 设为当前账户的 R2 S3 完整地址，将 `R2_BUCKET_NAME` 设为私有存储桶名称。为该桶创建只读凭据，通过 Worker secrets 配置 `R2_ACCESS_KEY_ID` 和 `R2_SECRET_ACCESS_KEY`。
+在[桶的 CORS 配置](https://developers.cloudflare.com/r2/buckets/cors/)中，允许站点来源发送 `PUT` 请求，并允许 `Content-Type`、`Content-Disposition` 和 `If-None-Match` 请求头。部署后，用浏览器在站点上传一份文件，验证跨域配置。
 
 ## 发布者登录
 

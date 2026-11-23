@@ -43,6 +43,10 @@ pub async fn handle(req: Request, env: Env) -> Result<Response> {
     Router::with_data(publisher)
         .get("/api/manage/me", |_, ctx| Response::from_json(&ctx.data))
         .post_async("/api/manage/resources", crate::uploads::create)
+        .put_async(
+            "/api/manage/resources/:id/publication",
+            crate::uploads::publish,
+        )
         .run(req, env)
         .await
 }

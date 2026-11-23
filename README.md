@@ -4,7 +4,7 @@
 
 Wavlark is a public file library. The SvelteKit Worker in `web/` (`wavlark`)
 renders the catalog. Its `API` service binding calls the Rust Worker in
-`worker/` (`wavlark-api`) for metadata and signed downloads.
+`worker/` (`wavlark-api`) for publication, catalog queries, and signed file transfers.
 
 ## Run locally
 
@@ -40,27 +40,24 @@ local D1 migrations. Each checkout keeps its D1 and R2 data in
 
 Run `mise run build` to build and dry-run both Workers locally.
 
-## Try a local file
+## Publish a file
 
-From the repository root, add a file to local R2 and publish its catalog entry:
+In **Publisher workspace**, choose a file of up to 100 MiB, optionally enter a
+description, and select **Upload file**. The browser uploads directly to the
+private R2 bucket. Select **Confirm publication** to add it to the public
+catalog. Share the details page or use **Download file** to save the original.
 
-```sh
-printf 'Hello\n' | mise run wrangler:local r2 object put wavlark-files/hello --pipe \
-  --content-type text/plain --content-disposition 'attachment; filename="hello.txt"'
-mise run wrangler:local d1 execute DB \
-  --command "INSERT OR REPLACE INTO resources (id, name, size_bytes, published_at) VALUES ('hello', 'hello.txt', 6, unixepoch())"
-```
+## Production storage
 
-Refresh the home page, open **hello.txt**, and select **Download file**.
-The resource ID doubles as its object key. R2's `Content-Disposition` supplies
-the download filename. A null `published_at` keeps the resource out of the
-catalog and disables its `/download/<id>` link. For a published file, that link
-redirects to a five-minute signed R2 URL.
+Configure the Rust Worker with the account's absolute R2 S3 endpoint in
+`R2_ENDPOINT` and the private bucket name in `R2_BUCKET_NAME`. Give the signing
+credentials **Object Read & Write** access to this bucket and store them in
+Worker secrets `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`.
 
-For the deployed Rust Worker, configure `R2_ENDPOINT` with the account's absolute R2
-S3 endpoint and `R2_BUCKET_NAME` with the private bucket name. Store the
-bucket-scoped, read-only credentials as Worker secrets `R2_ACCESS_KEY_ID` and
-`R2_SECRET_ACCESS_KEY`.
+In the [bucket CORS policy](https://developers.cloudflare.com/r2/buckets/cors/),
+allow the site's origin to send `PUT` with the headers `Content-Type`,
+`Content-Disposition`, and `If-None-Match`. Check the policy by uploading from
+the deployed site in a browser.
 
 ## Publisher access
 

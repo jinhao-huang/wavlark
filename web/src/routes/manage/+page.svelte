@@ -1,4 +1,5 @@
 <script>
+  import { goto } from '$app/navigation';
   import Button from '#lib/components/ui/button/button.svelte';
   import { requestUpload, sendFile } from '#lib/upload.js';
 
@@ -9,7 +10,7 @@
   let phase = $state('ready');
   let sent = $state(0);
   let message = $state('');
-  let busy = $derived(phase === 'starting' || phase === 'uploading');
+  let busy = $derived(phase === 'starting' || phase === 'uploading' || phase === 'publishing');
 
   function reset() {
     upload = null;
@@ -18,10 +19,29 @@
     sent = 0;
   }
 
+  async function publish() {
+    phase = 'publishing';
+    message = '';
+    try {
+      const response = await fetch(`/api/manage/resources/${upload.id}/publication`, { method: 'PUT' });
+      if (response.status === 409) {
+        reset();
+        message = 'The stored file could not be verified. Upload it again.';
+        return;
+      }
+      if (response.status !== 204) throw new Error();
+      await goto(`/resources/${upload.id}`, { refreshAll: true });
+    } catch {
+      phase = 'uploaded';
+      message = 'Publication could not be confirmed. Try confirming again.';
+    }
+  }
+
   async function submit(event) {
     event.preventDefault();
     const file = files?.[0];
     if (!file || busy) return;
+    if (phase === 'uploaded') return publish();
     message = '';
     try {
       phase = 'starting';
@@ -59,15 +79,17 @@
     {:else if phase === 'uploading'}
       <progress aria-label="File upload" value={sent} max={files[0].size || 1}></progress>
       {Math.floor(sent / (files[0].size || 1) * 100)}%
-    {:else if phase === 'uploaded'}
-      Uploaded. Awaiting publication.
+    {:else if phase === 'publishing'}
+      Confirming publication…
     {:else if message}
       {message}
+    {:else if phase === 'uploaded'}
+      Uploaded. Confirm to make this file public.
     {/if}
   </div>
-  {#if phase !== 'uploaded'}
-    <Button type="submit" class="justify-self-start" disabled={!files?.length || busy}>
-      {message ? 'Retry upload' : 'Upload file'}
-    </Button>
-  {/if}
+  <Button type="submit" class="justify-self-start" disabled={!files?.length || busy}>
+    {#if phase === 'uploaded' || phase === 'publishing'}Confirm publication
+    {:else if message}Retry upload
+    {:else}Upload file{/if}
+  </Button>
 </form>
