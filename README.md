@@ -1,7 +1,8 @@
 # Wavlark
 
-Wavlark is a public file library. SvelteKit renders the catalog on Cloudflare
-Workers and calls a Rust Worker through a service binding for metadata and downloads.
+Wavlark is a public file library. The SvelteKit Worker in `web/` (`wavlark`)
+renders the catalog. Its `API` service binding calls the Rust Worker in
+`worker/` (`wavlark-api`) for metadata and signed downloads.
 
 ## Run locally
 
@@ -12,18 +13,24 @@ mise trust
 mise run setup
 ```
 
+If your checkout has a `.dev.vars` at the repository root, copy any custom
+values into `worker/.dev.vars`. For local R2, use the endpoint from
+`worker/.dev.vars.example`.
+
 Start the local server:
 
 ```sh
 mise run dev
 ```
 
-Open the local URL printed by Vite to browse the public file library. A fresh
-catalog is empty. Setup applies the local D1 migrations and initializes
-`.dev.vars` with credentials for Wrangler's local R2 emulator. If an existing
-`.dev.vars` uses a relative `R2_ENDPOINT`, replace it with the absolute URL
-from `.dev.vars.example`. At the same origin as the catalog, `GET /api/health`
-returns `{"status":"ok"}`.
+Open the URL printed by Vite. The catalog and signed downloads share this
+address. Vite starts on port 5173 and tries the next available port if it's
+busy. To choose a different starting port, run `mise run dev --port 5200`.
+
+Setup initializes `worker/.dev.vars` for the R2 emulator and applies the
+local D1 migrations. Each checkout keeps its D1 and R2 data in
+`.wrangler/state`. A fresh catalog is empty. `GET /api/health` returns
+`{"status":"ok"}`.
 
 Run `mise run build` to build and dry-run both Workers locally.
 
@@ -32,9 +39,9 @@ Run `mise run build` to build and dry-run both Workers locally.
 From the repository root, add a file to local R2 and publish its catalog entry:
 
 ```sh
-printf 'Hello\n' | mise exec -- pnpm exec wrangler r2 object put wavlark-files/hello --local --pipe \
+printf 'Hello\n' | mise run wrangler:local r2 object put wavlark-files/hello --pipe \
   --content-type text/plain --content-disposition 'attachment; filename="hello.txt"'
-mise exec -- pnpm exec wrangler d1 execute DB --local \
+mise run wrangler:local d1 execute DB \
   --command "INSERT OR REPLACE INTO resources (id, name, size_bytes, published_at) VALUES ('hello', 'hello.txt', 6, unixepoch())"
 ```
 

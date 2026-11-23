@@ -1,4 +1,4 @@
-R2_ENDPOINT=http://127.0.0.1:8788/cdn-cgi/local/r2/s3/
+R2_ENDPOINT=/cdn-cgi/local/r2/s3/
 R2_BUCKET_NAME=wavlark-files
 R2_ACCESS_KEY_ID=local-access-key
 R2_SECRET_ACCESS_KEY=local-secret-key
