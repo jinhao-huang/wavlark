@@ -8,6 +8,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
+percent-encoding = "2"
 rusty-s3 = { version = "0.12", default-features = false, features = ["rustcrypto", "wasm_bindgen"] }
 serde = { version = "1", features = ["derive"] }
 serde-wasm-bindgen = "0.6"

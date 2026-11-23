@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use rusty_s3::{Bucket, Credentials, S3Action, UrlStyle};
+use rusty_s3::S3Action;
 use serde_json::{Value, json};
 use worker::*;
 
@@ -58,18 +58,7 @@ pub async fn download(req: Request, ctx: RouteContext<()>) -> Result<Response> {
         return Response::error("File not found.", 404);
     };
 
-    let endpoint = req.url()?.join(&ctx.var("R2_ENDPOINT")?.to_string())?;
-    let bucket = Bucket::new(
-        endpoint,
-        UrlStyle::Path,
-        ctx.var("R2_BUCKET_NAME")?.to_string(),
-        "auto",
-    )
-    .map_err(|e| Error::from(e.to_string()))?;
-    let credentials = Credentials::new(
-        ctx.secret("R2_ACCESS_KEY_ID")?.to_string(),
-        ctx.secret("R2_SECRET_ACCESS_KEY")?.to_string(),
-    );
+    let (bucket, credentials) = crate::storage::signer(&req, &ctx.env)?;
     let url = bucket
         .get_object(Some(&credentials), &key)
         .sign(Duration::from_secs(300));

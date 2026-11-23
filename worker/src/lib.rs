@@ -1,5 +1,7 @@
 mod catalog;
 mod publisher;
+mod storage;
+mod uploads;
 
 use serde_json::json;
 use worker::*;

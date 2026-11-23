@@ -801,6 +801,7 @@ dependencies = [
 name = "wavlark-worker"
 version = "0.1.0"
 dependencies = [
+ "percent-encoding",
  "rusty-s3",
  "serde",
  "serde-wasm-bindgen",

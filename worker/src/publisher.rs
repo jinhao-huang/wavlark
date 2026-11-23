@@ -13,9 +13,9 @@ extern "C" {
 }
 
 #[derive(Deserialize, Serialize)]
-struct Publisher {
+pub struct Publisher {
     #[serde(rename(deserialize = "sub"))]
-    id: String,
+    pub id: String,
     email: String,
 }
 
@@ -42,6 +42,7 @@ pub async fn handle(req: Request, env: Env) -> Result<Response> {
     }
     Router::with_data(publisher)
         .get("/api/manage/me", |_, ctx| Response::from_json(&ctx.data))
+        .post_async("/api/manage/resources", crate::uploads::create)
         .run(req, env)
         .await
 }
