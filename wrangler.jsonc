@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "wavlark",
+  "main": "worker/build/index.js",
+  "compatibility_date": "2026-11-19",
+  "assets": {
+    "directory": "./web/build"
+  },
+  "build": {
+    "command": "npm run build --workspace web && cd worker && worker-build --release",
+    "watch_dir": ["web/src", "worker/src"]
+  }
+}

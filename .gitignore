@@ -1,0 +1,8 @@
+node_modules/
+.wrangler/
+web/.svelte-kit/
+web/build/
+worker/build/
+worker/target/
+.dev.vars
+.env
