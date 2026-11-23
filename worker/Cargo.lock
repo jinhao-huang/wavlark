@@ -802,6 +802,8 @@ name = "wavlark-worker"
 version = "0.1.0"
 dependencies = [
  "rusty-s3",
+ "serde",
+ "serde-wasm-bindgen",
  "serde_json",
  "worker",
 ]

@@ -55,3 +55,17 @@ For the deployed Rust Worker, configure `R2_ENDPOINT` with the account's absolut
 S3 endpoint and `R2_BUCKET_NAME` with the private bucket name. Store the
 bucket-scoped, read-only credentials as Worker secrets `R2_ACCESS_KEY_ID` and
 `R2_SECRET_ACCESS_KEY`.
+
+## Publisher access
+
+Create one Cloudflare Access self-hosted application for `/manage` and
+`/api/manage` on the site's hostname. Add an Allow policy for the invited
+email addresses. Child paths [inherit the policy](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/#policy-inheritance).
+
+In the `vars` section of `worker/wrangler.jsonc`, set `ACCESS_ISSUER` to the
+team origin (e.g. `https://your-team.cloudflareaccess.com`, without a trailing
+slash) and `ACCESS_AUD` to the application's audience tag. Open **Publisher
+workspace** on the deployed site and sign in to see your email.
+
+To verify the management page and API locally with temporary signed test
+credentials, run `mise run test`.

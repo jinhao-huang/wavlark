@@ -16,3 +16,7 @@ run = [
   "test -f worker/.dev.vars || cp worker/.dev.vars.example worker/.dev.vars",
   "mise run wrangler:local d1 migrations apply DB",
 ]
+
+[tasks.test]
+dir = "worker"
+run = ["pnpm --dir ../web run build", "node --test tests/*.test.mjs"]
