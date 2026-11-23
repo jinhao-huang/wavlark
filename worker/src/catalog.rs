@@ -46,7 +46,7 @@ pub async fn detail(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
     }
 }
 
-pub async fn download(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn download(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let id = ctx.param("id").expect("download route has an id");
     let published_id = ctx
         .d1("DB")?
@@ -58,7 +58,7 @@ pub async fn download(req: Request, ctx: RouteContext<()>) -> Result<Response> {
         return Response::error("File not found.", 404);
     };
 
-    let endpoint = req.url()?.join(&ctx.var("R2_ENDPOINT")?.to_string())?;
+    let endpoint = Url::parse(&ctx.var("R2_ENDPOINT")?.to_string())?;
     let bucket = Bucket::new(
         endpoint,
         UrlStyle::Path,

@@ -1,13 +1,10 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "wavlark",
+  "name": "wavlark-api",
   "main": "worker/build/index.js",
   "compatibility_date": "2026-11-19",
-  "assets": {
-    "directory": "./web/build",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/download/*"]
-  },
+  "workers_dev": false,
+  "preview_urls": false,
   "d1_databases": [
     { "binding": "DB", "database_name": "wavlark" }
   ],
@@ -24,7 +21,8 @@
     }
   ],
   "build": {
-    "command": "pnpm --dir web run build && cd worker && worker-build --release",
-    "watch_dir": ["web/src", "worker/src"]
+    "command": "worker-build --release",
+    "cwd": "worker",
+    "watch_dir": "worker/src"
   }
 }

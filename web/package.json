@@ -9,7 +9,7 @@
     "build": "vite build"
   },
   "devDependencies": {
-    "@sveltejs/adapter-static": "^4.0.1",
+    "@sveltejs/adapter-cloudflare": "^9.0.0",
     "@sveltejs/kit": "^3.4.0",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tailwindcss/vite": "^4.3.5",

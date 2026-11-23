@@ -21,5 +21,5 @@ export function formatSize(bytes) {
   return `${Number(size.toFixed(1))} ${units[unit]}`;
 }
 
-const dateFormat = new Intl.DateTimeFormat('en', { dateStyle: 'medium' });
+const dateFormat = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeZone: 'UTC' });
 export const formatDate = (seconds) => dateFormat.format(seconds * 1000);

@@ -2,8 +2,10 @@
   "name": "wavlark",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev",
-    "build": "wrangler deploy --dry-run"
+    "dev": "WRANGLER_REGISTRY_PATH=\"$PWD/.wrangler/registry\" pnpm run '/^dev:/'",
+    "dev:web": "pnpm --dir web exec vite dev",
+    "dev:api": "wrangler dev --port 8788",
+    "build": "wrangler deploy --dry-run && pnpm --dir web run build && pnpm --dir web exec wrangler deploy --dry-run"
   },
   "devDependencies": {
     "wrangler": "^4.166.0"
