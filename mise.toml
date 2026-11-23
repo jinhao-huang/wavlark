@@ -4,3 +4,8 @@ pnpm = "11.20.0"
 # Select the pinned binary before rustup adds Cargo's shared bin directory.
 "cargo:worker-build" = "0.9.0"
 rust = { version = "1.97.1", targets = "wasm32-unknown-unknown" }
+
+[tasks]
+setup = "pnpm install --frozen-lockfile"
+dev = "pnpm dev"
+build = "pnpm build"
