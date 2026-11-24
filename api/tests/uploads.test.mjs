@@ -12,7 +12,7 @@ test('upload, publish, delete and reuse file paths', async (t) => {
     { config: {
       ...rawConfig,
       main: 'tests/r2-delete-failure.mjs',
-      vars: { ACCESS_ISSUER: access.issuer, ACCESS_AUD: access.audience }
+      vars: { ...rawConfig.vars, ACCESS_ISSUER: access.issuer, ACCESS_AUD: access.audience }
     } }
   ] });
   t.after(() => app.close());
