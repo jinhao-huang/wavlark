@@ -1,4 +1,4 @@
-use super::{PART_SIZE, Resource, expired, ticket_lifetime};
+use super::{PART_SIZE, Resource, TICKET_FIELDS, expired, ticket_lifetime};
 use rusty_s3::S3Action;
 use serde::Deserialize;
 use serde_json::json;
@@ -43,14 +43,13 @@ impl Resource {
         env: &Env,
         deadline: u64,
     ) -> Result<Response> {
-        let parts: Vec<String> = serde_json::from_str(&self.part_etags)?;
-        let offset = (parts.len() as u64 * PART_SIZE).min(self.size_bytes);
+        let offset = (u64::from(self.part_count) * PART_SIZE).min(self.size_bytes);
         let mut ticket = json!({ "id": self.id, "path": self.path, "offset": offset });
         if offset < self.size_bytes {
             let Some(upload_id) = self.multipart_session(env).await? else {
                 return expired();
             };
-            let number = parts.len() as u16 + 1;
+            let number = self.part_count + 1;
             let length = (self.size_bytes - offset).min(PART_SIZE);
             let ttl = ticket_lifetime(deadline);
             if ttl.is_zero() {
@@ -94,12 +93,12 @@ pub async fn record_part(mut req: Request, ctx: RouteContext<()>) -> Result<Resp
     let slot = format!("$[{index}]");
     let row = ctx
         .d1("DB")?
-        .prepare(
+        .prepare(format!(
             "UPDATE resources SET part_etags = json_set(part_etags, ?, ?)
          WHERE id = ? AND upload_id IS NOT NULL AND expires_at > unixepoch()
            AND ? < size_bytes AND (json_array_length(part_etags) = ? OR json_extract(part_etags, ?) = ?)
-         RETURNING *",
-        )
+         RETURNING {TICKET_FIELDS}",
+        ))
         .bind(&[
             slot.as_str().into(),
             etag.into(),

@@ -1,5 +1,21 @@
 const resources = '/api/manage/resources';
 
+export async function hashFile(file, onProgress) {
+  const worker = new Worker(new URL('./hash-file.worker.js', import.meta.url), { type: 'module' });
+  try {
+    return await new Promise((resolve, reject) => {
+      worker.onmessage = ({ data }) => {
+        if (typeof data === 'number') onProgress(data);
+        else resolve(data);
+      };
+      worker.onerror = () => reject(new Error('Could not read the file to verify its contents. Retry the upload.'));
+      worker.postMessage(file);
+    });
+  } finally {
+    worker.terminate();
+  }
+}
+
 async function ticket(path, method, data) {
   const response = await fetch(path, {
     method,

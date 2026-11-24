@@ -1,12 +1,22 @@
 <script>
+  import { onMount } from 'svelte';
   import Button from '#lib/components/ui/button/button.svelte';
-  import { requestUpload, sendFile } from '#lib/upload.js';
+  import { hashFile, requestUpload, sendFile } from '#lib/upload.js';
 
   let { draft, partSize, maxSize, onrefresh, busy = $bindable(false) } = $props();
   let items = $state([]);
   let directory = $state('');
   let description = $state('');
   let notice = $state('');
+  const concurrencyOptions = [1, 2, 3, 4, 5, 6, 7, 8];
+  const preferenceKey = 'wavlark.uploadConcurrency';
+  let concurrency = $state(4);
+
+  onMount(() => {
+    if (draft) return;
+    const saved = Number(localStorage.getItem(preferenceKey));
+    if (concurrencyOptions.includes(saved)) concurrency = saved;
+  });
 
   function choose(input) {
     items = Array.from(input.files, file => ({
@@ -26,8 +36,9 @@
       }
       if (!draft && file.size > maxSize) throw new Error(`Choose a file of ${maxSize / 1024 ** 2} MiB or smaller.`);
       if ((draft ? draft.uploaded_bytes != null : file.size > partSize) && !item.digest) {
-        const hash = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
-        item.digest = Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('');
+        item.status = 'Checking file';
+        item.sent = 0;
+        item.digest = await hashFile(file, bytes => item.sent = bytes);
       }
       const ticket = await requestUpload(file, directory, description, item.requestId, item.id, item.digest);
       item.id = ticket.id;
@@ -61,7 +72,7 @@
       }
     }
     try {
-      await Promise.all([next(), next()]);
+      await Promise.all(Array.from({ length: Math.min(concurrency, pending.length) }, next));
       await onrefresh(uploaded);
     } catch {
       notice = 'Reload Manage files to refresh the draft list.';
@@ -82,6 +93,15 @@
   </label>
   {#if !draft}
     <label class="grid gap-2 font-semibold">
+      Concurrent uploads
+      <select value={concurrency} disabled={busy} onchange={event => {
+        concurrency = Number(event.currentTarget.value);
+        localStorage.setItem(preferenceKey, String(concurrency));
+      }} class="w-fit rounded-md border border-line bg-white px-3 py-2 font-normal">
+        {#each concurrencyOptions as count (count)}<option value={count}>{count}</option>{/each}
+      </select>
+    </label>
+    <label class="grid gap-2 font-semibold">
       Directory (optional)
       <input type="text" placeholder="e.g. Maps/Europe" bind:value={directory} disabled={busy}
         class="rounded-md border border-line bg-white p-3 font-normal" />
@@ -98,8 +118,8 @@
         <li class="grid gap-1 py-2 text-sm">
           <strong class="wrap-anywhere">{item.path ?? item.file.name}</strong>
           <span role="status">{item.status}{item.error ? ` · ${item.error}` : ''}</span>
-          {#if item.status === 'Uploading'}
-            <progress aria-label={`Uploading ${item.file.name}`} value={item.sent} max={item.file.size || 1}></progress>
+          {#if item.status === 'Checking file' || item.status === 'Uploading'}
+            <progress aria-label={`${item.status} ${item.file.name}`} value={item.sent} max={item.file.size || 1}></progress>
           {:else if item.status === 'Failed'}
             {#if !draft && item.id}
               <span class="muted">Retry keeps this draft’s original directory and description.</span>

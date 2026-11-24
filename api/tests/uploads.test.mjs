@@ -44,7 +44,8 @@ test('upload, publish, delete and reuse file paths', async (t) => {
   const put = (ticket, body) => fetch(ticket.url, { method: 'PUT', headers: ticket.headers, body });
 
   assert.equal((await create({}, '')).status, 401);
-  assert.equal((await create({ size_bytes: 100 * 1024 * 1024 + 1 })).status, 413);
+  const maxSize = 50_000 * 1024 ** 2;
+  assert.equal((await create({ size_bytes: maxSize + 1 })).status, 413);
   for (const fields of [{ name: 'a/b' }, { directory: 'a//b' }, { directory: 'a/../b' }]) {
     assert.equal((await create(fields)).status, 400);
   }
@@ -277,6 +278,20 @@ test('upload, publish, delete and reuse file paths', async (t) => {
       return response.headers.get('etag');
     };
     assert.equal((await create({ ...fields, sha256: undefined })).status, 400);
+    const largest = await create({ ...fields, size_bytes: maxSize });
+    assert.equal(largest.status, 201);
+    const { id } = await largest.json();
+    // Resume at the final part without transferring a 50,000 MiB test fixture.
+    const receipts = Array(9999).fill('a'.repeat(32));
+    await DB.prepare('UPDATE resources SET part_etags = ? WHERE id = ?').bind(JSON.stringify(receipts), id).run();
+    const finalPart = await (await resume(id)).json();
+    assert.equal(finalPart.number, 10_000);
+    assert.equal(finalPart.offset, maxSize - partSize);
+    assert.equal(finalPart.length, partSize);
+    const finished = await (await ack(finalPart, 'b'.repeat(32))).json();
+    assert.equal(finished.offset, maxSize);
+    assert.equal(finished.url, undefined);
+    assert.equal((await discard(id)).status, 204);
     const boundary = await (await create({ name: 'exact.bin', size_bytes: partSize })).json();
     assert.equal(boundary.offset, undefined);
     assert.equal((await put(boundary, body.subarray(0, partSize))).status, 200);

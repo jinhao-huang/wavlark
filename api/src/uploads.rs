@@ -16,8 +16,9 @@ extern "C" {
     fn random_uuid() -> String;
 }
 
-pub const MAX_SIZE: u64 = 100 * 1024 * 1024;
 pub const PART_SIZE: u64 = 5 * 1024 * 1024;
+// R2 accepts up to 10,000 parts per multipart upload.
+pub const MAX_SIZE: u64 = PART_SIZE * 10_000;
 
 #[derive(Deserialize)]
 struct Upload {
@@ -38,10 +39,13 @@ struct Resource {
     size_bytes: u64,
     sha256: Option<String>,
     upload_id: Option<String>,
-    part_etags: String,
+    part_count: u16,
     // Cleared on publication.
     expires_at: Option<u64>,
 }
+
+// Upload tickets need only the receipt count, even when acknowledging the last of 10,000 parts.
+const TICKET_FIELDS: &str = "id, path, size_bytes, sha256, upload_id, expires_at, json_array_length(part_etags) AS part_count";
 
 fn valid_segment(segment: &str) -> bool {
     !segment.trim().is_empty()
@@ -126,7 +130,13 @@ pub async fn create(mut req: Request, ctx: RouteContext<()>) -> Result<Response>
         return Response::error("Enter folder names separated by a single slash.", 400);
     }
     if upload.size_bytes > MAX_SIZE {
-        return Response::error("Choose a file of 100 MiB or smaller.", 413);
+        return Response::error(
+            format!(
+                "Choose a file of {} MiB or smaller.",
+                MAX_SIZE / (1024 * 1024)
+            ),
+            413,
+        );
     }
     if upload.size_bytes > PART_SIZE {
         if !upload.sha256.as_deref().is_some_and(|hash| {
@@ -151,7 +161,7 @@ pub async fn create(mut req: Request, ctx: RouteContext<()>) -> Result<Response>
     let id = random_uuid();
     let resource = ctx
         .d1("DB")?
-        .prepare(
+        .prepare(format!(
             "INSERT INTO resources (id, path, description, size_bytes, request_id, sha256, expires_at)
              VALUES (?, ?, ?, ?, ?, ?, unixepoch() + 86400)
              ON CONFLICT(path) DO UPDATE SET path = excluded.path
@@ -159,8 +169,8 @@ pub async fn create(mut req: Request, ctx: RouteContext<()>) -> Result<Response>
                AND resources.size_bytes = excluded.size_bytes
                AND resources.description = excluded.description
                AND resources.sha256 IS excluded.sha256
-             RETURNING *",
-        )
+             RETURNING {TICKET_FIELDS}",
+        ))
         .bind(&[
             id.as_str().into(),
             path.as_str().into(),
@@ -184,22 +194,22 @@ pub async fn create(mut req: Request, ctx: RouteContext<()>) -> Result<Response>
     Ok(ticket)
 }
 
-async fn find_resource(ctx: &RouteContext<()>) -> Result<Option<Resource>> {
-    let id = ctx.param("id").expect("resource route has an id");
-    ctx.d1("DB")?
-        .prepare("SELECT * FROM resources WHERE id = ?")
-        .bind(&[id.as_str().into()])?
-        .first(None)
-        .await
-}
-
 #[derive(Deserialize)]
 struct Resume {
     sha256: String,
 }
 
 pub async fn renew(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let Some(resource) = find_resource(&ctx).await? else {
+    let id = ctx.param("id").expect("resource route has an id");
+    let Some(resource) = ctx
+        .d1("DB")?
+        .prepare(format!(
+            "SELECT {TICKET_FIELDS} FROM resources WHERE id = ?"
+        ))
+        .bind(&[id.as_str().into()])?
+        .first::<Resource>(None)
+        .await?
+    else {
         return Response::error("Draft not found.", 404);
     };
     if let Some(expected) = &resource.sha256
@@ -217,8 +227,26 @@ pub async fn renew(mut req: Request, ctx: RouteContext<()>) -> Result<Response> 
     resource.upload_ticket(&req, &ctx.env).await
 }
 
+#[derive(Deserialize)]
+struct Publication {
+    id: String,
+    size_bytes: u64,
+    upload_id: Option<String>,
+    part_etags: String,
+    expires_at: Option<u64>,
+}
+
 pub async fn publish(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let Some(record) = find_resource(&ctx).await? else {
+    let id = ctx.param("id").expect("resource route has an id");
+    let Some(record) = ctx
+        .d1("DB")?
+        .prepare(
+            "SELECT id, size_bytes, upload_id, part_etags, expires_at FROM resources WHERE id = ?",
+        )
+        .bind(&[id.as_str().into()])?
+        .first::<Publication>(None)
+        .await?
+    else {
         return Response::error("File not found.", 404);
     };
     if let Some(deadline) = record.expires_at {

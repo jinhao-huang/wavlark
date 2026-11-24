@@ -38,10 +38,11 @@ On **Public files**, select files across catalog pages and click **Download sele
 Your browser saves each original separately and may ask for permission to download multiple files.
 Check its downloads list for progress. To get a missing file, open **Download individually** and click its path.
 
-Under **Manage files → Upload files**, choose one or more files of up to 100 MiB
+Under **Manage files → Upload files**, choose one or more files of up to 50,000 MiB
 each. The directory and optional description apply to all of them. Leave the
-directory empty for the root, or enter a path such as `Maps/Europe`. Select
-**Upload files**. Two files can upload at once. Retry failed files individually.
+directory empty for the root, or enter a path such as `Maps/Europe`. Set
+**Concurrent uploads** to the number of files to upload at once (1–8, default 4),
+then select **Upload files**. The browser remembers your choice. Retry failed files individually.
 Under **Unpublished drafts**, select the files to publish and click **Confirm
 publication**. Each has its own share link, such as `/resources/Maps/Europe/atlas.pdf`.
 

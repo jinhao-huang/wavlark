@@ -26,7 +26,7 @@ mise run dev
 
 在 **Public files** 中可以跨页勾选文件。点击 **Download selected files** 后，浏览器会分别下载每份原文件，首次下载时可能会询问是否允许连续下载多个文件。进度可在浏览器的下载列表中查看。如果少了某份文件，展开 **Download individually** 并点击对应的文件路径即可补下。
 
-在 **Manage files → Upload files** 中选择一份或多份文件，每份最大 100 MiB。这批文件共用同一个目录和可选说明。**Directory** 留空表示根目录，也可以填写 `地图/杭州` 这样的多级目录。点击 **Upload files** 后，页面最多同时上传两份，失败的文件可以单独重试。在 **Unpublished drafts** 中勾选要公开的文件，点击 **Confirm publication** 即可一起发布。每份文件都有自己的分享链接，例如 `/resources/地图/杭州/交通图.pdf`。
+在 **Manage files → Upload files** 中选择一份或多份文件，每份最大 50,000 MiB（约 48.83 GiB）。这批文件共用同一个目录和可选说明。**Directory** 留空表示根目录，也可以填写 `地图/杭州` 这样的多级目录。用 **Concurrent uploads** 选择同时上传的文件数（1 到 8 份，默认 4 份），再点击 **Upload files**。浏览器会记住这个设置。失败的文件可以单独重试。在 **Unpublished drafts** 中勾选要公开的文件，点击 **Confirm publication** 即可一起发布。每份文件都有自己的分享链接，例如 `/resources/地图/杭州/交通图.pdf`。
 
 开始上传后，草稿会占用所选路径。任何管理员都可以回到 **Manage files → Unpublished drafts**，确认发布已上传的文件。5 MiB 及以下的文件一次传完，更大的文件按 5 MiB 分片上传。中断后可以在原页面重试，也可以在草稿中点击 **Resume upload**，重新选择原文件，从上次确认的分片继续。整文件上传的草稿可用 **Re-upload file** 从头重试。要替换它，点击 **Discard draft** 并确认，即可在原路径上传新文件。草稿在创建 24 小时后过期，定时任务随后删除文件并释放路径。
 
