@@ -3,12 +3,14 @@
   import Button from '#lib/components/ui/button/button.svelte';
   import { requestUpload, sendFile } from '#lib/upload.js';
 
-  let { draft, onrefresh, onuploaded = onrefresh, busy = $bindable(false) } = $props();
+  let { draft, partSize, maxSize, onrefresh, onuploaded = onrefresh, busy = $bindable(false) } = $props();
   let files = $state();
   let directory = $state('');
   let description = $state('');
   let requestId;
-  let pendingId;
+  let pendingId = $state();
+  let digest;
+  let resumable = $derived(draft ? draft.uploaded_bytes != null : files?.[0]?.size > partSize);
   let sent = $state(null);
   let message = $state('');
 
@@ -26,6 +28,10 @@
       message = 'Choose the original file with the same name and size.';
       return;
     }
+    if (!draft && file.size > maxSize) {
+      message = `Choose a file of ${maxSize / (1024 * 1024)} MiB or smaller.`;
+      return;
+    }
     busy = true;
     message = '';
     sent = null;
@@ -34,17 +40,21 @@
     let written;
     try {
       if (!draftId) requestId ??= crypto.randomUUID();
-      ticket = await requestUpload(file, directory, description, requestId, draftId);
+      if (resumable && !digest) {
+        const hash = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+        digest = Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, '0')).join('');
+      }
+      ticket = await requestUpload(file, directory, description, requestId, draftId, digest);
       pendingId = ticket.id;
       sent = 0;
       written = await sendFile(ticket, file, (bytes) => sent = bytes);
     } catch (error) {
       message = error.message;
       try {
-        if (draftId && [404, 409, 410].includes(error.cause)) {
+        if (draftId && [404, 409, 410].includes(error.cause) && !ticket) {
           reset();
           await onrefresh(error.message);
-        } else if (ticket && !draft) {
+        } else if (ticket) {
           await invalidateAll();
         }
       } catch {
@@ -74,7 +84,7 @@
 <form class="mt-4 grid max-w-xl gap-4" onsubmit={submit}>
   <label class="grid gap-2 font-semibold">
     {draft ? 'Original file' : 'File'}
-    <input type="file" required bind:files onchange={reset} disabled={busy}
+    <input type="file" required bind:files onchange={() => { digest = undefined; reset(); }} disabled={busy}
       class="rounded-md border border-line bg-white p-3 text-sm font-normal file:mr-3 file:font-semibold" />
   </label>
   {#if !draft}
@@ -100,6 +110,6 @@
     {/if}
   </div>
   <Button type="submit" class="justify-self-start" disabled={!files?.length || busy}>
-    {draft ? 'Upload again' : 'Upload file'}
+    {resumable && (draft || pendingId) ? 'Continue upload' : draft || pendingId ? 'Upload again' : 'Upload file'}
   </Button>
 </form>

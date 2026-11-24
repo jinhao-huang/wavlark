@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { createHash } from 'node:crypto';
 import { createTestHarness, experimental_readRawConfig } from 'wrangler';
 import { startLocalAccess } from '../../dev/local-access.mjs';
 
@@ -234,4 +235,107 @@ test('upload, publish, delete and reuse file paths', async (t) => {
     assert.equal(await FILES.head(race.id), null);
     assert.equal(await DB.prepare('SELECT id FROM resources WHERE id = ?').bind(race.id).first(), null);
   }
+
+  await t.test('resume from acknowledged parts and publish by UUID', async () => {
+    const partSize = 8 * 1024 ** 2;
+    const body = Buffer.alloc(partSize + 3, 97);
+    body.write('end', partSize);
+    const sha256 = createHash('sha256').update(body).digest('hex');
+    const fields = { name: 'large.bin', directory: '', size_bytes: body.length, sha256, request_id: crypto.randomUUID() };
+    const control = (id, action, method, data, jwt = otherAdmin) => app.fetch(`/api/manage/resources/${id}/${action}`, {
+      method, headers: { 'Content-Type': 'application/json', 'Cf-Access-Jwt-Assertion': jwt },
+      body: JSON.stringify(data)
+    });
+    const resume = (id, hash = sha256) => control(id, 'upload', 'POST', { sha256: hash });
+    const ack = (ticket, etag) => control(ticket.id, 'upload/parts/' + ticket.number, 'PUT', { etag });
+    const uploadPart = async (ticket) => {
+      const response = await put(ticket, body.subarray(ticket.offset, ticket.offset + ticket.length));
+      assert.equal(response.status, 200, await response.text());
+      return response.headers.get('etag');
+    };
+    assert.equal((await create({ ...fields, sha256: undefined })).status, 400);
+    const boundary = await (await create({ name: 'exact.bin', size_bytes: partSize })).json();
+    assert.equal(boundary.offset, undefined);
+    assert.equal((await discard(boundary.id)).status, 204);
+    const both = await Promise.all([create(fields), create(fields)]);
+    assert.deepEqual(both.map(r => r.status).sort(), [200, 201]);
+    const [first, replay] = await Promise.all(both.map(r => r.json()));
+    assert.equal(new URL(first.url).searchParams.get('uploadId'), new URL(replay.url).searchParams.get('uploadId'));
+    assert.equal((await control(first.id, 'upload/parts/1', 'PUT', { etag: 'abc' }, '')).status, 401);
+    assert.equal(first.length, partSize);
+    assert.equal(first.offset, 0);
+    assert.equal((await resume(first.id, '0'.repeat(64))).status, 422);
+    assert.ok(!(await put(first, 'bad size')).ok);
+    const early = await ack({ ...first, number: 2 }, 'early');
+    assert.equal(early.status, 409, await early.text());
+    const etag = await uploadPart(first);
+    // A lost upload response leaves this part eligible for retransmission.
+    assert.equal((await (await resume(first.id)).json()).number, 1);
+    const latest = await uploadPart(first);
+    assert.ok(etag && latest);
+    const second = await (await ack(first, latest)).json();
+    assert.equal(second.number, 2);
+    assert.equal(second.length, 3);
+    assert.equal((await (await ack(first, latest)).json()).offset, partSize);
+    assert.equal((await draftList()).find(d => d.id === first.id).uploaded_bytes, partSize);
+    assert.equal((await publish(first.id)).status, 409);
+    const recovered = await (await resume(first.id)).json();
+    assert.equal(recovered.offset, partSize);
+    const done = await (await ack(recovered, await uploadPart(recovered))).json();
+    assert.equal(done.url, undefined);
+    assert.equal(done.offset, body.length);
+    assert.equal((await publish(first.id)).status, 204);
+    assert.equal((await publish(first.id)).status, 204);
+    const stored = await FILES.get(first.id);
+    assert.deepEqual(Buffer.from(await stored.arrayBuffer()), body);
+    assert.equal(stored.customMetadata.wavlark, 'upload');
+    assert.ok(stored.httpMetadata.contentDisposition.includes(fields.name.replace('.', '%2E')));
+    assert.equal((await discard(first.id)).status, 404);
+    assert.equal((await ack(first, latest)).status, 409);
+    assert.equal((await remove(first.id)).status, 204);
+
+    // A concurrent PUT can replace a receipt before R2 assembles the object.
+    const stale = await (await create(fields)).json();
+    const last = await (await ack(stale, await uploadPart(stale))).json();
+    await ack(last, await uploadPart(last));
+    await uploadPart(stale);
+    const conflict = await publish(stale.id);
+    assert.equal(conflict.status, 409, await conflict.text());
+    const retry = await (await resume(stale.id)).json();
+    assert.equal(retry.offset, 0);
+    const retryTag = await uploadPart(retry);
+    const tail = await (await ack(retry, retryTag)).json();
+    const tailTag = await uploadPart(tail);
+    await ack(tail, tailTag);
+
+    // Complete in R2 as if publication stopped before the D1 update.
+    const session = FILES.resumeMultipartUpload(stale.id, new URL(retry.url).searchParams.get('uploadId'));
+    await session.complete([retryTag, tailTag].map((tag, index) => ({ partNumber: index + 1, etag: tag.slice(1, -1) })));
+    assert.equal((await publish(stale.id)).status, 204);
+    assert.equal((await remove(stale.id)).status, 204);
+
+    for (const expired of [false, true]) {
+      const old = await (await create(fields)).json();
+      await uploadPart(old);
+      if (expired) {
+        await DB.prepare('UPDATE resources SET expires_at = 1 WHERE id = ?').bind(old.id).run();
+        assert.equal((await resume(old.id)).status, 410);
+        await api.scheduled({ cron: '*/5 * * * *' });
+      } else {
+        assert.equal((await discard(old.id)).status, 204);
+      }
+      const fresh = await (await create(fields)).json();
+      assert.notEqual(fresh.id, old.id);
+      assert.ok(!(await put(old, body.subarray(0, partSize))).ok);
+      assert.equal((await ack(old, latest)).status, 409);
+      assert.equal((await publish(old.id)).status, 404);
+      assert.equal((await discard(fresh.id)).status, 204);
+    }
+    // Drafts created by the previous deployment retain their write-once PUT.
+    await DB.prepare("INSERT INTO resources (id,path,request_id,size_bytes,expires_at) VALUES ('legacy','old.bin','old',?,unixepoch()+3600)").bind(body.length).run();
+    const legacy = await (await renew('legacy')).json();
+    assert.equal(legacy.offset, undefined);
+    assert.equal((await put(legacy, body)).status, 200);
+    assert.equal((await publish('legacy')).status, 204);
+  });
 });

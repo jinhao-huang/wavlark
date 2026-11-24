@@ -41,9 +41,11 @@ file public. Share its details page, for example `/resources/Maps/Europe/atlas.p
 
 Uploads reserve their path. Any administrator can reopen **Manage files →
 Unpublished drafts** and confirm a completed upload.
-If the transfer was interrupted, select **Re-upload file** and choose the original
-file to upload it from the beginning. A retry keeps any file already uploaded to
-the draft. To replace it, confirm **Discard draft** and upload the new file at the freed path.
+Files over 8 MiB upload in parts. After an interruption, retry on the same page or
+select **Resume upload** on the draft and choose the original file. The upload
+continues from the last confirmed part. For a single-request upload, **Re-upload
+file** retries the whole file. Once uploaded, select **Confirm publication**.
+To replace a file, confirm **Discard draft** and upload the replacement at the freed path.
 Drafts expire 24 hours after creation. Scheduled cleanup removes their files and releases their paths.
 
 Under **Published files**, select **Delete** and confirm. The share link stops
@@ -97,7 +99,7 @@ entries. Keep both sets of entries if you want to manage files from either addre
 Open **R2 Object Storage → wavlark-files → Settings → CORS Policy**. Choose
 **Add CORS policy** (or edit the existing policy) and open the **JSON** tab.
 For a new policy, paste the rule below. If this rule already exists, add the origin to its
-`AllowedOrigins` array and keep the other entries. Replace `https://files.example.com` with the origin of
+`AllowedOrigins` array and include `ETag` in `ExposeHeaders` so the browser can confirm each part. Replace `https://files.example.com` with the origin of
 your management page, then select **Save**. For example, if you open
 `https://wavlark-web.my-team.workers.dev/manage`, enter
 `https://wavlark-web.my-team.workers.dev` with no path or trailing slash.
@@ -108,7 +110,8 @@ your management page, then select **Save**. For example, if you open
   {
     "AllowedOrigins": ["https://files.example.com"],
     "AllowedMethods": ["PUT"],
-    "AllowedHeaders": ["Content-Type", "Content-Disposition", "If-None-Match", "x-amz-meta-wavlark"]
+    "AllowedHeaders": ["Content-Type", "Content-Disposition", "If-None-Match", "x-amz-meta-wavlark"],
+    "ExposeHeaders": ["ETag"]
   }
 ]
 ```

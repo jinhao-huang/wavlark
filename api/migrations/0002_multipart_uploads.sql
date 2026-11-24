@@ -1,0 +1,3 @@
+ALTER TABLE resources ADD COLUMN sha256 TEXT;
+ALTER TABLE resources ADD COLUMN upload_id TEXT;
+ALTER TABLE resources ADD COLUMN part_etags TEXT NOT NULL DEFAULT '[]';

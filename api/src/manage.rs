@@ -1,4 +1,4 @@
-use crate::catalog;
+use crate::{catalog, uploads};
 use serde_json::{Value, json};
 use worker::wasm_bindgen::prelude::*;
 use worker::*;
@@ -40,12 +40,13 @@ pub async fn handle(req: Request, env: Env) -> Result<Response> {
         .delete_async("/api/manage/resources/:id/upload", |_, ctx| {
             remove(ctx, true)
         })
-        .post_async("/api/manage/resources", crate::uploads::create)
-        .post_async("/api/manage/resources/:id/upload", crate::uploads::renew)
+        .post_async("/api/manage/resources", uploads::create)
+        .post_async("/api/manage/resources/:id/upload", uploads::renew)
         .put_async(
-            "/api/manage/resources/:id/publication",
-            crate::uploads::publish,
+            "/api/manage/resources/:id/upload/parts/:number",
+            uploads::record_part,
         )
+        .put_async("/api/manage/resources/:id/publication", uploads::publish)
         .run(req, env)
         .await
 }
@@ -54,35 +55,40 @@ async fn list(req: Request, ctx: RouteContext<()>, email: String) -> Result<Resp
     let drafts = ctx
         .d1("DB")?
         .prepare(
-            "SELECT id, path, size_bytes, description, expires_at FROM resources
-         WHERE published_at IS NULL AND expires_at > unixepoch()
-         ORDER BY expires_at DESC, id DESC",
+            "SELECT id, path, size_bytes, description, expires_at,
+                CASE WHEN sha256 IS NOT NULL THEN min(size_bytes, json_array_length(part_etags) * ?) END AS uploaded_bytes FROM resources
+             WHERE published_at IS NULL AND expires_at > unixepoch()
+             ORDER BY expires_at DESC, id DESC",
         )
+        .bind(&[(uploads::PART_SIZE as u32).into()])?
         .all()
         .await?
         .results::<Value>()?;
-    catalog::list(req, ctx, true, json!({ "email": email, "drafts": drafts })).await
+    catalog::list(req, ctx, true, json!({ "email": email, "drafts": drafts, "part_size": uploads::PART_SIZE, "max_upload_size": uploads::MAX_SIZE })).await
 }
 
 async fn remove(ctx: RouteContext<()>, draft: bool) -> Result<Response> {
     let id = ctx.param("id").expect("resource route has an id");
     let state = if draft { "IS NULL" } else { "IS NOT NULL" };
-    let deleted_id = ctx
+    let deleted = ctx
         .d1("DB")?
         .prepare(format!(
-            "DELETE FROM resources WHERE id = ? AND published_at {state} RETURNING id"
+            "DELETE FROM resources WHERE id = ? AND published_at {state} RETURNING id, upload_id"
         ))
         .bind(&[id.as_str().into()])?
-        .first::<String>(Some("id"))
+        .first::<uploads::StoredUpload>(None)
         .await?;
-    let Some(id) = deleted_id else {
+    let Some(file) = deleted else {
         return if draft {
             Response::error("This draft is no longer available.", 404)
         } else {
             Ok(Response::empty()?.with_status(204))
         };
     };
-    if let Err(error) = ctx.bucket("FILES")?.delete(&id).await {
+    let bucket = ctx.bucket("FILES")?;
+    file.abort(&bucket).await?;
+    let id = file.id;
+    if let Err(error) = bucket.delete(&id).await {
         console_error!("R2 deletion for {id} deferred to orphan cleanup: {error}");
     }
     Ok(Response::empty()?.with_status(204))

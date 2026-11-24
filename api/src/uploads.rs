@@ -1,3 +1,6 @@
+mod multipart;
+pub use multipart::record_part;
+
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use rusty_s3::S3Action;
 use serde::Deserialize;
@@ -13,6 +16,9 @@ extern "C" {
     fn random_uuid() -> String;
 }
 
+pub const MAX_SIZE: u64 = 100 * 1024 * 1024;
+pub const PART_SIZE: u64 = 8 * 1024 * 1024;
+
 #[derive(Deserialize)]
 struct Upload {
     request_id: String,
@@ -22,6 +28,7 @@ struct Upload {
     #[serde(default)]
     description: String,
     size_bytes: u64,
+    sha256: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -29,6 +36,9 @@ struct Resource {
     id: String,
     path: String,
     size_bytes: u64,
+    sha256: Option<String>,
+    upload_id: Option<String>,
+    part_etags: String,
     // Cleared on publication.
     expires_at: Option<u64>,
 }
@@ -51,27 +61,38 @@ fn now() -> u64 {
     Date::now().as_millis() / 1000
 }
 
+fn ticket_lifetime(deadline: u64) -> Duration {
+    Duration::from_secs(deadline.saturating_sub(now()).min(900))
+}
+
 impl Resource {
-    fn upload_ticket(&self, req: &Request, env: &Env) -> Result<Response> {
+    fn disposition(&self) -> String {
+        let name = self.path.rsplit('/').next().unwrap();
+        format!(
+            "attachment; filename*=UTF-8''{}",
+            utf8_percent_encode(name, NON_ALPHANUMERIC)
+        )
+    }
+
+    async fn upload_ticket(&self, req: &Request, env: &Env) -> Result<Response> {
         let Some(deadline) = self.expires_at else {
             return Response::error("This file is already published.", 409);
         };
-        let seconds = deadline.saturating_sub(now()).min(900);
-        if seconds == 0 {
+        let ttl = ticket_lifetime(deadline);
+        if ttl.is_zero() {
             return expired();
         }
-        let name = self.path.rsplit('/').next().unwrap();
-        let disposition = format!(
-            "attachment; filename*=UTF-8''{}",
-            utf8_percent_encode(name, NON_ALPHANUMERIC)
-        );
+        if self.sha256.is_some() {
+            return self.part_ticket(req, env, deadline).await;
+        }
+        let (bucket, credentials) = crate::storage::signer(req, env)?;
+        let disposition = self.disposition();
         let headers = BTreeMap::from([
             ("content-disposition", disposition.as_str()),
             ("content-type", "application/octet-stream"),
             ("if-none-match", "*"),
             ("x-amz-meta-wavlark", "upload"),
         ]);
-        let (bucket, credentials) = crate::storage::signer(req, env)?;
         let mut put = bucket.put_object(Some(&credentials), &self.id);
         for (&name, &value) in &headers {
             put.headers_mut().insert(name, value);
@@ -79,7 +100,7 @@ impl Resource {
         // The browser supplies Content-Length when it sends a File.
         put.headers_mut()
             .insert("content-length", self.size_bytes.to_string());
-        let url = put.sign(Duration::from_secs(seconds));
+        let url = put.sign(ttl);
         Response::from_json(
             &json!({ "id": self.id, "path": self.path, "url": url.as_str(), "headers": headers }),
         )
@@ -104,8 +125,23 @@ pub async fn create(mut req: Request, ctx: RouteContext<()>) -> Result<Response>
     if !directory.is_empty() && !directory.split('/').all(valid_segment) {
         return Response::error("Enter folder names separated by a single slash.", 400);
     }
-    if upload.size_bytes > 100 * 1024 * 1024 {
+    if upload.size_bytes > MAX_SIZE {
         return Response::error("Choose a file of 100 MiB or smaller.", 413);
+    }
+    if upload.size_bytes > PART_SIZE {
+        if !upload.sha256.as_deref().is_some_and(|hash| {
+            hash.len() == 64
+                && hash
+                    .bytes()
+                    .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+        }) {
+            return Response::error(
+                "Provide the original file digest for a resumable upload.",
+                400,
+            );
+        }
+    } else if upload.sha256.is_some() {
+        return Response::error("Only multipart uploads take a file digest.", 400);
     }
     let path = if directory.is_empty() {
         upload.name
@@ -116,13 +152,14 @@ pub async fn create(mut req: Request, ctx: RouteContext<()>) -> Result<Response>
     let resource = ctx
         .d1("DB")?
         .prepare(
-            "INSERT INTO resources (id, path, description, size_bytes, request_id, expires_at)
-             VALUES (?, ?, ?, ?, ?, unixepoch() + 86400)
+            "INSERT INTO resources (id, path, description, size_bytes, request_id, sha256, expires_at)
+             VALUES (?, ?, ?, ?, ?, ?, unixepoch() + 86400)
              ON CONFLICT(path) DO UPDATE SET path = excluded.path
              WHERE resources.request_id = excluded.request_id
                AND resources.size_bytes = excluded.size_bytes
                AND resources.description = excluded.description
-             RETURNING id, path, size_bytes, expires_at",
+               AND resources.sha256 IS excluded.sha256
+             RETURNING *",
         )
         .bind(&[
             id.as_str().into(),
@@ -130,6 +167,7 @@ pub async fn create(mut req: Request, ctx: RouteContext<()>) -> Result<Response>
             upload.description.trim().into(),
             (upload.size_bytes as f64).into(),
             upload.request_id.as_str().into(),
+            upload.sha256.as_deref().map(JsValue::from_str).unwrap_or(JsValue::NULL),
         ])?
         .first::<Resource>(None)
         .await?;
@@ -139,7 +177,7 @@ pub async fn create(mut req: Request, ctx: RouteContext<()>) -> Result<Response>
             409,
         );
     };
-    let ticket = resource.upload_ticket(&req, &ctx.env)?;
+    let ticket = resource.upload_ticket(&req, &ctx.env).await?;
     if ticket.status_code() == 200 && resource.id == id {
         return Ok(ticket.with_status(201));
     }
@@ -149,17 +187,34 @@ pub async fn create(mut req: Request, ctx: RouteContext<()>) -> Result<Response>
 async fn find_resource(ctx: &RouteContext<()>) -> Result<Option<Resource>> {
     let id = ctx.param("id").expect("resource route has an id");
     ctx.d1("DB")?
-        .prepare("SELECT id, path, size_bytes, expires_at FROM resources WHERE id = ?")
+        .prepare("SELECT * FROM resources WHERE id = ?")
         .bind(&[id.as_str().into()])?
         .first(None)
         .await
 }
 
-pub async fn renew(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    match find_resource(&ctx).await? {
-        Some(resource) => resource.upload_ticket(&req, &ctx.env),
-        None => Response::error("Draft not found.", 404),
+#[derive(Deserialize)]
+struct Resume {
+    sha256: String,
+}
+
+pub async fn renew(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let Some(resource) = find_resource(&ctx).await? else {
+        return Response::error("Draft not found.", 404);
+    };
+    if let Some(expected) = &resource.sha256
+        && resource.expires_at.is_some_and(|deadline| deadline > now())
+        && !req
+            .json::<Resume>()
+            .await
+            .is_ok_and(|data| &data.sha256 == expected)
+    {
+        return Response::error(
+            "Choose the original file. Its contents differ from this draft.",
+            422,
+        );
     }
+    resource.upload_ticket(&req, &ctx.env).await
 }
 
 pub async fn publish(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -170,7 +225,38 @@ pub async fn publish(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
         if deadline <= now() {
             return expired();
         }
-        let object = ctx.bucket("FILES")?.head(&record.id).await?;
+        let bucket = ctx.bucket("FILES")?;
+        let mut object = bucket.head(&record.id).await?;
+        if object.is_none()
+            && let Some(upload_id) = &record.upload_id
+        {
+            let etags: Vec<String> = serde_json::from_str(&record.part_etags)?;
+            if etags.len() as u64 != record.size_bytes.div_ceil(PART_SIZE) {
+                return Response::error("Resume the upload to send the remaining parts.", 409);
+            }
+            let parts = etags
+                .into_iter()
+                .enumerate()
+                .map(|(i, etag)| UploadedPart::new(i as u16 + 1, etag));
+            let session = bucket.resume_multipart_upload(&record.id, upload_id)?;
+            object = match session.complete(parts).await {
+                Ok(file) => Some(file),
+                Err(error) => match bucket.head(&record.id).await? {
+                    Some(file) => Some(file),
+                    None if error.to_string().contains("(10025)") => {
+                        // R2 rejected a stored receipt, e.g. after concurrent retries of a part.
+                        ctx.d1("DB")?.prepare(
+                            "UPDATE resources SET part_etags = '[]' WHERE id = ? AND part_etags = ? AND expires_at > unixepoch()"
+                        ).bind(&[record.id.as_str().into(), record.part_etags.as_str().into()])?.run().await?;
+                        return Response::error(
+                            "R2 could not verify the uploaded parts. Choose the original file to upload them again.",
+                            409,
+                        );
+                    }
+                    None => return Err(error),
+                },
+            };
+        }
         let Some(file) = object else {
             return Response::error("The file is missing. Retry the upload.", 409);
         };
@@ -182,7 +268,8 @@ pub async fn publish(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
         }
         // A repeated confirmation succeeds, even when another request just published it.
         let updated = ctx.d1("DB")?.prepare(
-            "UPDATE resources SET published_at = coalesce(published_at, unixepoch()), expires_at = NULL
+            "UPDATE resources SET published_at = coalesce(published_at, unixepoch()), expires_at = NULL,
+                upload_id = NULL, sha256 = NULL, part_etags = '[]'
              WHERE id = ? AND (published_at IS NOT NULL OR expires_at > unixepoch()) RETURNING id"
         ).bind(&[record.id.into()])?.first::<String>(Some("id")).await?;
         if updated.is_none() {
@@ -192,21 +279,43 @@ pub async fn publish(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
     Ok(Response::empty()?.with_status(204))
 }
 
+#[derive(Deserialize)]
+pub struct StoredUpload {
+    pub id: String,
+    upload_id: Option<String>,
+}
+
+impl StoredUpload {
+    pub async fn abort(&self, bucket: &Bucket) -> Result<()> {
+        if let Some(upload_id) = &self.upload_id {
+            // The bucket lifecycle also expires sessions whose abort request fails.
+            if let Err(error) = bucket
+                .resume_multipart_upload(&self.id, upload_id)?
+                .abort()
+                .await
+            {
+                console_warn!("Could not abort multipart upload for {}: {error}", self.id);
+            }
+        }
+        Ok(())
+    }
+}
+
 pub async fn clean_expired(env: Env) -> Result<()> {
     let db = env.d1("DB")?;
-    let ids: Vec<String> = db
-        .prepare(
-            "SELECT id FROM resources WHERE published_at IS NULL AND expires_at <= unixepoch()
-         ORDER BY expires_at LIMIT 1000",
-        )
-        .raw::<String>()
-        .await?
-        .into_iter()
-        .flatten()
-        .collect();
+    let bucket = env.bucket("FILES")?;
+    // Each multipart draft may also require an R2 abort in this invocation.
+    let rows = db.prepare(
+        "SELECT id, upload_id FROM resources WHERE expires_at <= unixepoch() ORDER BY expires_at LIMIT 32"
+    ).all().await?.results::<StoredUpload>()?;
+    let mut ids = Vec::with_capacity(rows.len());
+    for row in rows {
+        row.abort(&bucket).await?;
+        ids.push(row.id);
+    }
     if !ids.is_empty() {
         let batch = serde_json::to_string(&ids)?;
-        env.bucket("FILES")?.delete_multiple(ids).await?;
+        bucket.delete_multiple(ids).await?;
         db.prepare("DELETE FROM resources WHERE id IN (SELECT value FROM json_each(?)) AND published_at IS NULL")
             .bind(&[batch.into()])?.run().await?;
     }

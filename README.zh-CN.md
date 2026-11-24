@@ -26,7 +26,7 @@ mise run dev
 
 在 **Manage files → Upload a file** 中选择一个不超过 100 MiB 的文件。**Directory** 留空表示根目录，也可以填写 `地图/杭州` 这样的多级目录。按需填写说明，点击 **Upload file**，再点击 **Confirm publication** 公开文件。访客可以通过详情页链接访问资源，例如 `/resources/地图/杭州/交通图.pdf`。
 
-开始上传后，草稿会占用所选路径。任何管理员都可以回到 **Manage files → Unpublished drafts**，确认发布已上传的文件。如果传输中断，点击 **Re-upload file** 并选择原文件即可从头上传。如果文件已传完，重试会保留已有文件。要替换它，点击 **Discard draft** 并确认，即可在原路径上传新文件。草稿在创建 24 小时后过期，定时任务随后删除文件并释放路径。
+开始上传后，草稿会占用所选路径。任何管理员都可以回到 **Manage files → Unpublished drafts**，确认发布已上传的文件。超过 8 MiB 的文件按片上传。中断后可以在原页面重试，也可以在草稿中点击 **Resume upload**，重新选择原文件，从上次确认的分片继续。整文件上传的草稿可用 **Re-upload file** 从头重试。要替换它，点击 **Discard draft** 并确认，即可在原路径上传新文件。草稿在创建 24 小时后过期，定时任务随后删除文件并释放路径。
 
 在 **Published files** 中点击 **Delete** 并确认，原分享链接随即失效。在同一路径发布新文件后，原链接会打开新文件。Wavlark 按 UUID 删除旧的 R2 文件。如果 R2 暂时不可用，每日清理任务会补删。此前签发的 R2 下载链接最迟在签发后五分钟失效。
 
@@ -58,14 +58,15 @@ mise run deploy
 
 ### 允许浏览器上传
 
-打开 **R2 Object Storage → wavlark-files → Settings → CORS Policy**，选择 **Add CORS policy**（已有策略则编辑），切到 **JSON**。新建时粘贴下面的规则。已有这条规则时，在 `AllowedOrigins` 中追加新来源，保留原有条目。把示例中的 `https://files.example.com` 换成管理页的协议和域名，末尾不加斜杠，然后点 **Save**。例如，管理页是 `https://wavlark-web.my-team.workers.dev/manage`，这里就填 `https://wavlark-web.my-team.workers.dev`。[Cloudflare R2 控制台说明](https://developers.cloudflare.com/r2/buckets/cors/#add-cors-policies-from-the-dashboard)
+打开 **R2 Object Storage → wavlark-files → Settings → CORS Policy**，选择 **Add CORS policy**（已有策略则编辑），切到 **JSON**。新建时粘贴下面的规则。已有这条规则时，在 `AllowedOrigins` 中追加新来源，并确保 `ExposeHeaders` 包含 `ETag`，以便浏览器确认每一片上传成功。把示例中的 `https://files.example.com` 换成管理页的协议和域名，末尾不加斜杠，然后点 **Save**。例如，管理页是 `https://wavlark-web.my-team.workers.dev/manage`，这里就填 `https://wavlark-web.my-team.workers.dev`。[Cloudflare R2 控制台说明](https://developers.cloudflare.com/r2/buckets/cors/#add-cors-policies-from-the-dashboard)
 
 ```json
 [
   {
     "AllowedOrigins": ["https://files.example.com"],
     "AllowedMethods": ["PUT"],
-    "AllowedHeaders": ["Content-Type", "Content-Disposition", "If-None-Match", "x-amz-meta-wavlark"]
+    "AllowedHeaders": ["Content-Type", "Content-Disposition", "If-None-Match", "x-amz-meta-wavlark"],
+    "ExposeHeaders": ["ETag"]
   }
 ]
 ```

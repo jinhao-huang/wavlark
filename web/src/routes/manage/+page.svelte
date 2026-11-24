@@ -49,7 +49,7 @@
 
 <details class="mt-8" open={data.resources.length === 0 && data.page === 1}>
   <summary class="w-fit cursor-pointer font-semibold text-primary">Upload a file</summary>
-  <UploadForm onrefresh={refreshDrafts} />
+  <UploadForm partSize={data.part_size} maxSize={data.max_upload_size} onrefresh={refreshDrafts} />
 </details>
 
 <p role="status" class="mt-2 wrap-anywhere text-sm muted">{draftNotice}</p>
