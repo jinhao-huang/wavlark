@@ -193,18 +193,23 @@ test('upload, publish, delete and reuse file paths', async (t) => {
   assert.equal(await (await fetch(latest.headers.get('Location'))).text(), 'final');
 
   await t.test('download a selected version only while it is public', async () => {
-    const download = id => app.fetch('/api/downloads/' + id);
+    const download = id => app.fetch('/api/downloads/' + id, { redirect: 'manual' });
     assert.equal((await download(next.id)).status, 404);
     const draft = await (await create({ directory: '苏州' })).json();
     assert.equal((await put(draft, 'other')).status, 200);
     assert.equal((await download(draft.id)).status, 404);
     assert.equal((await publish(draft.id)).status, 204);
-    const check = await app.fetch(`/api/downloads?file=${draft.id}&file=${next.id}`);
+    const check = await app.fetch('/api/downloads/check', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify([draft.id, next.id])
+    });
     assert.deepEqual(await check.json(), [{ id: next.id }]);
-    const file = await download(draft.id);
+    const redirect = await download(draft.id);
+    assert.equal(redirect.status, 302);
+    assert.equal(redirect.headers.get('Cache-Control'), 'no-store');
+    const file = await fetch(redirect.headers.get('Location'));
     assert.equal(file.status, 200);
     assert.match(file.headers.get('Content-Disposition'), /^attachment;/);
-    assert.equal(file.headers.get('Cache-Control'), 'no-store');
     assert.equal(await file.text(), 'other');
     assert.equal((await remove(draft.id)).status, 204);
     assert.equal((await download(draft.id)).status, 404);

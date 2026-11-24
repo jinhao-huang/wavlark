@@ -24,7 +24,7 @@ mise run dev
 
 ## 管理文件
 
-在 **Public files** 中可以跨页勾选文件。选一份时，点 **Download file** 下载原文件。选多份时，点 **Download ZIP** 下载一个保留站内目录的 ZIP 包，每包最多 40 份文件，总大小上限为 200 MiB。浏览器打包时请保持页面打开。中断后需要重新下载整包。
+在 **Public files** 中可以跨页勾选文件。点击 **Download selected files** 后，浏览器会分别下载每份原文件，首次下载时可能会询问是否允许连续下载多个文件。进度可在浏览器的下载列表中查看。如果少了某份文件，展开 **Download individually** 并点击对应的文件路径即可补下。
 
 在 **Manage files → Upload files** 中选择一份或多份文件，每份最大 100 MiB。这批文件共用同一个目录和可选说明。**Directory** 留空表示根目录，也可以填写 `地图/杭州` 这样的多级目录。点击 **Upload files** 后，页面最多同时上传两份，失败的文件可以单独重试。在 **Unpublished drafts** 中勾选要公开的文件，点击 **Confirm publication** 即可一起发布。每份文件都有自己的分享链接，例如 `/resources/地图/杭州/交通图.pdf`。
 

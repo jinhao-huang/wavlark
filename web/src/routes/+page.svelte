@@ -1,7 +1,6 @@
 <script>
   import { invalidateAll } from '$app/navigation';
   import { onDestroy } from 'svelte';
-  import { prepareDownload } from '#lib/download.js';
   import { SvelteMap } from 'svelte/reactivity';
   import Button from '#lib/components/ui/button/button.svelte';
   import ResourceList from '#lib/components/ResourceList.svelte';
@@ -14,6 +13,8 @@
   onDestroy(() => transfer?.abort());
   let notice = $state('');
 
+  const downloadUrl = id => '/api/downloads/' + id;
+
   function select(file, checked) {
     if (checked) selected.set(file.id, file);
     else selected.delete(file.id);
@@ -25,24 +26,37 @@
     const controller = new AbortController();
     transfer = controller;
     notice = '';
+    const ids = [...selected.keys()];
     try {
-      const result = await prepareDownload([...selected.values()], controller.signal, message => notice = message);
-      if (result.missing) {
-        for (const file of result.missing) selected.delete(file.id);
-        notice = `No longer available: ${result.missing.map(file => file.path).join(', ')}. Review your selection.`;
+      const response = await fetch('/api/downloads/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ids),
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error();
+      const missing = await response.json();
+      if (missing.length) {
+        const paths = missing.map(({ id }) => selected.get(id).path);
+        for (const { id } of missing) selected.delete(id);
+        notice = `No longer available: ${paths.join(', ')}. Review your selection.`;
         await invalidateAll();
-      } else if (result.blob) {
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(result.blob);
-        link.download = 'wavlark.zip';
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(link.href), 60_000);
-        notice = '';
-      } else {
-        window.location.assign(result.url);
+        return;
       }
-    } catch (error) {
-      if (!controller.signal.aborted) notice = error.message;
+
+      const link = document.createElement('a');
+      link.download = '';
+      for (const [i, id] of ids.entries()) {
+        // Browsers can drop bursts of more than ten automatic downloads.
+        if (i && i % 10 === 0) await new Promise(resolve => setTimeout(resolve, 1100));
+        if (controller.signal.aborted) return;
+        link.href = downloadUrl(id);
+        link.click();
+      }
+      notice = ids.length === 1 ? 'Check your browser’s downloads for progress.'
+        : 'Check your browser’s downloads. If any files are missing, use the individual links.';
+    } catch {
+      if (!controller.signal.aborted) notice ||= 'Could not check the selection. Please retry.';
     } finally {
       transfer = null;
     }
@@ -54,9 +68,17 @@
 {#if selected.size}
   <div class="mt-5 flex flex-wrap items-center gap-3">
     <span role="status">{selected.size} selected · {formatSize(bytes)}</span>
-    <Button disabled={!!transfer} onclick={download}>{selected.size === 1 ? 'Download file' : 'Download ZIP'}</Button>
+    <Button disabled={!!transfer} onclick={download}>{transfer ? 'Requesting downloads…' : `Download selected files (${selected.size})`}</Button>
     <Button variant="outline" disabled={!!transfer} onclick={() => { selected.clear(); notice = ''; }}>Clear selection</Button>
   </div>
+  <details class="mt-3">
+    <summary class="w-fit cursor-pointer text-sm font-semibold text-primary">Download individually</summary>
+    <ul class="mt-2 space-y-1">
+      {#each selected.values() as file (file.id)}
+        <li><a class="wrap-anywhere text-primary underline" href={downloadUrl(file.id)} target="_blank" rel="noopener">{file.path}</a></li>
+      {/each}
+    </ul>
+  </details>
 {/if}
 {#if notice}<p role="status" class="mt-3 wrap-anywhere">{notice}</p>{/if}
 <ResourceList {data}>

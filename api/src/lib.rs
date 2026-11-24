@@ -22,8 +22,8 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             catalog::list(req, ctx, json!({}))
         })
         .get_async("/api/resources/*path", catalog::detail)
-        .get_async("/api/downloads/:id", catalog::selected_file)
-        .get_async("/api/downloads", catalog::missing_files)
+        .get_async("/api/downloads/:id", catalog::download)
+        .post_async("/api/downloads/check", catalog::missing_files)
         .get_async("/download/*path", catalog::download)
         .run(req, env)
         .await

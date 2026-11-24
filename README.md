@@ -34,9 +34,9 @@ to verify the management page and API with temporary signed credentials.
 
 ## Manage files
 
-On **Public files**, select files across catalog pages. **Download file** saves one
-original. **Download ZIP** saves up to 40 files totaling up to 200 MiB, with their catalog paths.
-Keep the catalog open while your browser prepares the ZIP. If interrupted, download it again.
+On **Public files**, select files across catalog pages and click **Download selected files**.
+Your browser saves each original separately and may ask for permission to download multiple files.
+Check its downloads list for progress. To get a missing file, open **Download individually** and click its path.
 
 Under **Manage files → Upload files**, choose one or more files of up to 100 MiB
 each. The directory and optional description apply to all of them. Leave the

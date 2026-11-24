@@ -55,11 +55,16 @@ pub async fn detail(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
 }
 
 pub async fn download(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let path = public_path(&ctx);
+    let (column, value) = match ctx.param("id") {
+        Some(id) => ("id", std::borrow::Cow::Borrowed(id.as_str())),
+        None => ("path", public_path(&ctx)),
+    };
     let published_id = ctx
         .d1("DB")?
-        .prepare("SELECT id FROM published_resources WHERE path = ?")
-        .bind(&[path.as_ref().into()])?
+        .prepare(format!(
+            "SELECT id FROM published_resources WHERE {column} = ?"
+        ))
+        .bind(&[value.as_ref().into()])?
         .first::<String>(Some("id"))
         .await?;
     let Some(key) = published_id else {
@@ -76,46 +81,15 @@ pub async fn download(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     Ok(response)
 }
 
-pub async fn missing_files(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let ids: Vec<_> = req
-        .url()?
-        .query_pairs()
-        .filter(|(name, _)| name == "file")
-        .map(|(_, id)| id.into_owned())
-        .collect();
+pub async fn missing_files(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let Ok(ids) = req.json::<Vec<String>>().await else {
+        return Response::error("Provide an array of file IDs.", 400);
+    };
     let missing = ctx.d1("DB")?
         .prepare("SELECT s.value AS id FROM json_each(?) s LEFT JOIN published_resources f ON f.id = s.value WHERE f.id IS NULL")
         .bind(&[serde_json::to_string(&ids)?.into()])?
         .all().await?.results::<Value>()?;
     let mut response = Response::from_json(&missing)?;
-    response.headers_mut().set("Cache-Control", "no-store")?;
-    Ok(response)
-}
-
-pub async fn selected_file(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let id = ctx.param("id").expect("download route has an id");
-    let published = ctx
-        .d1("DB")?
-        .prepare("SELECT id FROM published_resources WHERE id = ?")
-        .bind(&[id.as_str().into()])?
-        .first::<String>(Some("id"))
-        .await?;
-    if published.is_none() {
-        return Response::error("The selected file is no longer available.", 404);
-    }
-    let Some(object) = ctx.bucket("FILES")?.get(id).execute().await? else {
-        return Response::error("The stored file is missing.", 503);
-    };
-    let body = object.body().expect("unconditional R2 GET returns a body");
-    let mut response = Response::from_body(body.response_body()?)?;
-    let disposition = object.http_metadata().content_disposition;
-    response.headers_mut().set(
-        "Content-Disposition",
-        disposition.as_deref().unwrap_or("attachment"),
-    )?;
-    response
-        .headers_mut()
-        .set("Content-Type", "application/octet-stream")?;
     response.headers_mut().set("Cache-Control", "no-store")?;
     Ok(response)
 }
