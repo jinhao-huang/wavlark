@@ -17,7 +17,7 @@ extern "C" {
 }
 
 pub const MAX_SIZE: u64 = 100 * 1024 * 1024;
-pub const PART_SIZE: u64 = 8 * 1024 * 1024;
+pub const PART_SIZE: u64 = 5 * 1024 * 1024;
 
 #[derive(Deserialize)]
 struct Upload {

@@ -26,7 +26,7 @@ mise run dev
 
 在 **Manage files → Upload a file** 中选择一个不超过 100 MiB 的文件。**Directory** 留空表示根目录，也可以填写 `地图/杭州` 这样的多级目录。按需填写说明，点击 **Upload file**，再点击 **Confirm publication** 公开文件。访客可以通过详情页链接访问资源，例如 `/resources/地图/杭州/交通图.pdf`。
 
-开始上传后，草稿会占用所选路径。任何管理员都可以回到 **Manage files → Unpublished drafts**，确认发布已上传的文件。超过 8 MiB 的文件按片上传。中断后可以在原页面重试，也可以在草稿中点击 **Resume upload**，重新选择原文件，从上次确认的分片继续。整文件上传的草稿可用 **Re-upload file** 从头重试。要替换它，点击 **Discard draft** 并确认，即可在原路径上传新文件。草稿在创建 24 小时后过期，定时任务随后删除文件并释放路径。
+开始上传后，草稿会占用所选路径。任何管理员都可以回到 **Manage files → Unpublished drafts**，确认发布已上传的文件。5 MiB 及以下的文件一次传完，更大的文件按 5 MiB 分片上传。中断后可以在原页面重试，也可以在草稿中点击 **Resume upload**，重新选择原文件，从上次确认的分片继续。整文件上传的草稿可用 **Re-upload file** 从头重试。要替换它，点击 **Discard draft** 并确认，即可在原路径上传新文件。草稿在创建 24 小时后过期，定时任务随后删除文件并释放路径。
 
 在 **Published files** 中点击 **Delete** 并确认，原分享链接随即失效。在同一路径发布新文件后，原链接会打开新文件。Wavlark 按 UUID 删除旧的 R2 文件。如果 R2 暂时不可用，每日清理任务会补删。此前签发的 R2 下载链接最迟在签发后五分钟失效。
 
@@ -38,6 +38,8 @@ mise run dev
 
 - 打开 [D1 SQL Database](https://dash.cloudflare.com/?to=/:account/workers/d1)，点 **Create Database**，名称填 `wavlark`，位置由 Cloudflare 自动选择。Wrangler 会按名称查找数据库。
 - 打开 [R2 Object Storage](https://dash.cloudflare.com/?to=/:account/r2/overview)，如提示开通 R2，先完成开通。点 **Create bucket**，名称填 `wavlark-files`，位置选自动，不指定司法辖区。存储类别保留 **Standard**，公开访问保持关闭，桶由本站独占。
+
+从 8 MiB 分片升级时，请暂停新上传，把需要保留的分片草稿传完并发布。等其余分片草稿过期后即可部署，再刷新已打开的管理页面。
 
 完成本地初始化后，在仓库根目录登录该账户并部署。如果 Wrangler 提示注册 `workers.dev` 子域，选 **Yes**，为账户填一个可用的子域名。
 

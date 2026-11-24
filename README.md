@@ -41,7 +41,8 @@ file public. Share its details page, for example `/resources/Maps/Europe/atlas.p
 
 Uploads reserve their path. Any administrator can reopen **Manage files →
 Unpublished drafts** and confirm a completed upload.
-Files over 8 MiB upload in parts. After an interruption, retry on the same page or
+Files up to 5 MiB upload in one request. Larger files upload in 5 MiB parts.
+After an interruption, retry on the same page or
 select **Resume upload** on the draft and choose the original file. The upload
 continues from the last confirmed part. For a single-request upload, **Re-upload
 file** retries the whole file. Once uploaded, select **Confirm publication**.
@@ -62,6 +63,9 @@ Prepare these resources in the same Cloudflare account. Reuse them if they alrea
 
 - In [D1 SQL Database](https://dash.cloudflare.com/?to=/:account/workers/d1), select **Create Database**, name it `wavlark`, and use automatic placement. Wrangler finds it by name.
 - In [R2 Object Storage](https://dash.cloudflare.com/?to=/:account/r2/overview), activate R2 if prompted. Select **Create bucket**, name it `wavlark-files`, and use automatic location with no jurisdiction restriction. Keep the **Standard** storage class and leave public access disabled. Dedicate this bucket to the library.
+
+When upgrading from 8 MiB parts, pause new uploads and publish any multipart drafts
+you want to keep. Once the remaining multipart drafts expire, deploy and refresh any open management pages.
 
 After local setup, sign in to that account and deploy from the repository root.
 If Wrangler asks to register a `workers.dev` subdomain, choose **Yes** and enter an available name for the account.

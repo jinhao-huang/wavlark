@@ -237,9 +237,9 @@ test('upload, publish, delete and reuse file paths', async (t) => {
   }
 
   await t.test('resume from acknowledged parts and publish by UUID', async () => {
-    const partSize = 8 * 1024 ** 2;
-    const body = Buffer.alloc(partSize + 3, 97);
-    body.write('end', partSize);
+    const partSize = 5 * 1024 ** 2;
+    const body = Buffer.alloc(partSize + 1, 97);
+    body[partSize] = 98;
     const sha256 = createHash('sha256').update(body).digest('hex');
     const fields = { name: 'large.bin', directory: '', size_bytes: body.length, sha256, request_id: crypto.randomUUID() };
     const control = (id, action, method, data, jwt = otherAdmin) => app.fetch(`/api/manage/resources/${id}/${action}`, {
@@ -256,7 +256,8 @@ test('upload, publish, delete and reuse file paths', async (t) => {
     assert.equal((await create({ ...fields, sha256: undefined })).status, 400);
     const boundary = await (await create({ name: 'exact.bin', size_bytes: partSize })).json();
     assert.equal(boundary.offset, undefined);
-    assert.equal((await discard(boundary.id)).status, 204);
+    assert.equal((await put(boundary, body.subarray(0, partSize))).status, 200);
+    assert.equal((await publish(boundary.id)).status, 204);
     const both = await Promise.all([create(fields), create(fields)]);
     assert.deepEqual(both.map(r => r.status).sort(), [200, 201]);
     const [first, replay] = await Promise.all(both.map(r => r.json()));
@@ -275,7 +276,7 @@ test('upload, publish, delete and reuse file paths', async (t) => {
     assert.ok(etag && latest);
     const second = await (await ack(first, latest)).json();
     assert.equal(second.number, 2);
-    assert.equal(second.length, 3);
+    assert.equal(second.length, 1);
     assert.equal((await (await ack(first, latest)).json()).offset, partSize);
     assert.equal((await draftList()).find(d => d.id === first.id).uploaded_bytes, partSize);
     assert.equal((await publish(first.id)).status, 409);
