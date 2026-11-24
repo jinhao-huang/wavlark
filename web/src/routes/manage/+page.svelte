@@ -64,8 +64,8 @@
   }
 </script>
 
-<svelte:head><title>Publisher workspace · Wavlark</title></svelte:head>
-<h1>Publisher workspace</h1>
+<svelte:head><title>Manage files · Wavlark</title></svelte:head>
+<h1>Manage files</h1>
 <p class="mt-4 muted">Signed in as <strong>{data.email}</strong></p>
 
 <form class="mt-8 grid max-w-xl gap-5" onsubmit={submit}>

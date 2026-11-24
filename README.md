@@ -2,8 +2,8 @@
 
 [简体中文](README.zh-CN.md)
 
-Wavlark is a public file library. The SvelteKit Worker in `web/` (`wavlark`)
-renders the catalog. Its `API` service binding calls the Rust Worker in
+Wavlark is a public file library managed by one administrator. The SvelteKit Worker
+in `web/` (`wavlark`) renders the catalog. Its `API` service binding calls the Rust Worker in
 `worker/` (`wavlark-api`) for publication, catalog queries, and signed file transfers.
 
 ## Run locally
@@ -20,9 +20,8 @@ Open the URL printed by Vite. The catalog and signed downloads share this
 address. Vite starts on port 5173 and tries the next available port if it's
 busy. To choose a different starting port, run `mise run dev --port 5200`.
 
-To work as a publisher, start `mise run dev:publisher` and open **Publisher
-workspace**. It signs you in locally as `publisher@example.com` without a
-Cloudflare account. Use `mise run dev` for the signed-out view.
+To manage files locally, start `mise run dev:publisher` and open **Manage files**.
+You sign in as `publisher@example.com` without a Cloudflare account. Use `mise run dev` for the signed-out view.
 
 Setup initializes `worker/.dev.vars` for the R2 emulator and applies the
 local D1 migrations. Each checkout keeps its D1 and R2 data in
@@ -33,7 +32,7 @@ Run `mise run build` to build and dry-run both Workers locally.
 
 ## Publish a file
 
-In **Publisher workspace**, choose a file of up to 100 MiB. Leave **Directory**
+In **Manage files**, choose a file of up to 100 MiB. Leave **Directory**
 empty for the root, or enter a path such as `Maps/Europe`. You can add a
 description. Select **Upload file**, then **Confirm publication** to make the
 file public. Share its details page, for example `/resources/Maps/Europe/atlas.pdf`.
@@ -54,16 +53,16 @@ allow the site's origin to send `PUT` with the headers `Content-Type`,
 `Content-Disposition`, `If-None-Match`, and `x-amz-meta-wavlark`. Check the policy by uploading from
 the deployed site in a browser.
 
-## Publisher access
+## Administrator access
 
 Create one Cloudflare Access self-hosted application for `/manage` and
-`/api/manage` on the site's hostname. Add an Allow policy for the invited
-email addresses. Child paths [inherit the policy](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/#policy-inheritance).
+`/api/manage` on the site's hostname. In the Allow policy, set **Include → Emails** to
+the administrator's exact email address only. Child paths [inherit the policy](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/#policy-inheritance).
 
 In the `vars` section of `worker/wrangler.jsonc`, set `ACCESS_ISSUER` to the
 team origin (e.g. `https://your-team.cloudflareaccess.com`, without a trailing
-slash) and `ACCESS_AUD` to the application's audience tag. Open **Publisher
-workspace** on the deployed site and sign in to see your email.
+slash) and `ACCESS_AUD` to the application's audience tag. Open **Manage files**
+on the deployed site and sign in to see your email.
 
 To verify the management page and API locally with temporary signed test
 credentials, run `mise run test`.

@@ -804,7 +804,6 @@ dependencies = [
  "percent-encoding",
  "rusty-s3",
  "serde",
- "serde-wasm-bindgen",
  "serde_json",
  "worker",
 ]

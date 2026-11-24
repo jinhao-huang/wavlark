@@ -1,7 +1,6 @@
 CREATE TABLE resources (
     id TEXT PRIMARY KEY NOT NULL,
     path TEXT NOT NULL UNIQUE,
-    publisher_id TEXT NOT NULL,
     request_id TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     size_bytes INTEGER NOT NULL CHECK (size_bytes >= 0),

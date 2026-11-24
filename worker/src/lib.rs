@@ -1,5 +1,5 @@
 mod catalog;
-mod publisher;
+mod manage;
 mod storage;
 mod uploads;
 
@@ -10,7 +10,7 @@ use worker::*;
 async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     let path = req.path();
     if path == "/api/manage" || path.starts_with("/api/manage/") {
-        let mut response = publisher::handle(req, env).await?;
+        let mut response = manage::handle(req, env).await?;
         response.headers_mut().set("Cache-Control", "no-store")?;
         return Ok(response);
     }

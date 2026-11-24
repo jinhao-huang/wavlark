@@ -1,4 +1,3 @@
-use crate::publisher::Publisher;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use rusty_s3::S3Action;
 use serde::Deserialize;
@@ -87,7 +86,7 @@ impl Resource {
     }
 }
 
-pub async fn create(mut req: Request, ctx: RouteContext<Publisher>) -> Result<Response> {
+pub async fn create(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let content_type = req.headers().get("Content-Type")?.unwrap_or_default();
     if content_type.split(';').next() != Some("application/json") {
         return Response::error("Send file details as JSON.", 415);
@@ -117,11 +116,10 @@ pub async fn create(mut req: Request, ctx: RouteContext<Publisher>) -> Result<Re
     let resource = ctx
         .d1("DB")?
         .prepare(
-            "INSERT INTO resources (id, path, description, size_bytes, publisher_id, request_id, expires_at)
-             VALUES (?, ?, ?, ?, ?, ?, unixepoch() + 86400)
+            "INSERT INTO resources (id, path, description, size_bytes, request_id, expires_at)
+             VALUES (?, ?, ?, ?, ?, unixepoch() + 86400)
              ON CONFLICT(path) DO UPDATE SET path = excluded.path
-             WHERE resources.publisher_id = excluded.publisher_id
-               AND resources.request_id = excluded.request_id
+             WHERE resources.request_id = excluded.request_id
                AND resources.size_bytes = excluded.size_bytes
                AND resources.description = excluded.description
              RETURNING id, path, size_bytes, expires_at",
@@ -131,7 +129,6 @@ pub async fn create(mut req: Request, ctx: RouteContext<Publisher>) -> Result<Re
             path.as_str().into(),
             upload.description.trim().into(),
             (upload.size_bytes as f64).into(),
-            ctx.data.id.as_str().into(),
             upload.request_id.as_str().into(),
         ])?
         .first::<Resource>(None)
@@ -149,22 +146,24 @@ pub async fn create(mut req: Request, ctx: RouteContext<Publisher>) -> Result<Re
     Ok(ticket)
 }
 
-async fn owned_resource(ctx: &RouteContext<Publisher>) -> Result<Option<Resource>> {
+async fn find_resource(ctx: &RouteContext<()>) -> Result<Option<Resource>> {
     let id = ctx.param("id").expect("resource route has an id");
-    ctx.d1("DB")?.prepare(
-        "SELECT id, path, size_bytes, expires_at FROM resources WHERE id = ? AND publisher_id = ?"
-    ).bind(&[id.as_str().into(), ctx.data.id.as_str().into()])?.first(None).await
+    ctx.d1("DB")?
+        .prepare("SELECT id, path, size_bytes, expires_at FROM resources WHERE id = ?")
+        .bind(&[id.as_str().into()])?
+        .first(None)
+        .await
 }
 
-pub async fn renew(req: Request, ctx: RouteContext<Publisher>) -> Result<Response> {
-    match owned_resource(&ctx).await? {
+pub async fn renew(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    match find_resource(&ctx).await? {
         Some(resource) => resource.upload_ticket(&req, &ctx.env),
         None => Response::error("Draft not found.", 404),
     }
 }
 
-pub async fn publish(_req: Request, ctx: RouteContext<Publisher>) -> Result<Response> {
-    let Some(record) = owned_resource(&ctx).await? else {
+pub async fn publish(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let Some(record) = find_resource(&ctx).await? else {
         return Response::error("File not found.", 404);
     };
     if let Some(deadline) = record.expires_at {

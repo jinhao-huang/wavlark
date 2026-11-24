@@ -2,7 +2,7 @@ import { createRemoteJWKSet, errors, jwtVerify } from 'jose';
 
 const keySets = new Map();
 
-export async function verifyPublisher(token, issuer, audience) {
+export async function verifyAccessEmail(token, issuer, audience) {
   if (!keySets.has(issuer)) {
     keySets.set(issuer, createRemoteJWKSet(new URL('/cdn-cgi/access/certs', issuer)));
   }
@@ -10,7 +10,9 @@ export async function verifyPublisher(token, issuer, audience) {
     const { payload } = await jwtVerify(token, keySets.get(issuer), {
       algorithms: ['RS256'], issuer, audience, requiredClaims: ['exp']
     });
-    return payload.type === 'app' ? payload : null;
+    if (payload.type !== 'app' || typeof payload.sub !== 'string' || !payload.sub ||
+        typeof payload.email !== 'string' || !payload.email) return null;
+    return payload.email;
   } catch (error) {
     if (error instanceof errors.JWTClaimValidationFailed || error instanceof errors.JWTExpired ||
         error instanceof errors.JWSInvalid || error instanceof errors.JWTInvalid ||

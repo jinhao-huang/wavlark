@@ -16,7 +16,7 @@ test('reserve, renew, publish and reclaim file paths', async (t) => {
   await api.applyD1Migrations('DB');
   const { DB, FILES } = await api.getEnv();
   const token = await access.sign();
-  const other = await access.sign({ sub: 'another-publisher' });
+  const newLogin = await access.sign({ sub: 'new-subject' });
   const name = '地图 100% #1?.pdf';
   const directory = '浙江/杭州';
   const path = directory + '/' + name;
@@ -43,9 +43,7 @@ test('reserve, renew, publish and reclaim file paths', async (t) => {
   assert.deepEqual(reservations.map(r => r.status).sort(), [201, 409]);
   const upload = await reservations.find(r => r.status === 201).json();
   assert.equal(upload.path, path);
-  assert.equal((await create({}, other)).status, 409);
-  assert.equal((await renew(upload.id, other)).status, 404);
-  assert.equal((await publish(upload.id, other)).status, 404);
+  assert.equal((await renew(upload.id, '')).status, 401);
   assert.equal((await publish(upload.id, '')).status, 401);
   assert.equal((await publish(upload.id)).status, 409);
   assert.equal(new URL(upload.url).searchParams.get('X-Amz-Expires'), '900');
@@ -53,7 +51,7 @@ test('reserve, renew, publish and reclaim file paths', async (t) => {
 
   const deadline = Math.floor(Date.now() / 1000) + 300;
   await DB.prepare('UPDATE resources SET expires_at = ? WHERE id = ?').bind(deadline, upload.id).run();
-  const ticket = await (await renew(upload.id)).json();
+  const ticket = await (await renew(upload.id, newLogin)).json();
   assert.equal(ticket.id, upload.id);
   const ttl = Number(new URL(ticket.url).searchParams.get('X-Amz-Expires'));
   assert.ok(ttl > 0 && ttl <= 301);
@@ -68,11 +66,10 @@ test('reserve, renew, publish and reclaim file paths', async (t) => {
 
   const attempt = { request_id: crypto.randomUUID(), directory: 'retry' };
   const first = await create(attempt);
-  const retried = await create(attempt);
+  const retried = await create(attempt, newLogin);
   assert.equal(first.status, 201);
   assert.equal(retried.status, 200);
   assert.equal((await first.json()).id, (await retried.json()).id);
-  assert.equal((await create(attempt, other)).status, 409);
   assert.equal((await create({ ...attempt, size_bytes: 10 })).status, 409);
 
   const root = await (await create({ directory: '', size_bytes: 0 })).json();
@@ -83,8 +80,8 @@ test('reserve, renew, publish and reclaim file paths', async (t) => {
   await FILES.put(missing.id, 'unexpected size');
   assert.equal((await publish(missing.id)).status, 409);
 
-  assert.equal((await publish(upload.id)).status, 204);
-  assert.equal((await publish(upload.id)).status, 204);
+  assert.equal((await publish(upload.id, newLogin)).status, 204);
+  assert.equal((await publish(upload.id, newLogin)).status, 204);
   assert.equal((await renew(upload.id)).status, 409);
   assert.equal((await create()).status, 409);
   const catalog = await (await app.fetch('/api/resources')).json();
