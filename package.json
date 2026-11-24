@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --dir web exec vite dev",
-    "build": "wrangler deploy --cwd worker --dry-run && pnpm --dir web run build && pnpm --dir web exec wrangler deploy --dry-run"
+    "build": "wrangler deploy --cwd api --dry-run && pnpm --dir web run build && pnpm --dir web exec wrangler deploy --dry-run"
   },
   "devDependencies": {
     "wrangler": "^4.166.0"

@@ -2,7 +2,7 @@ node_modules/
 .wrangler/
 web/.svelte-kit/
 web/build/
-worker/build/
-worker/target/
+api/build/
+api/target/
 .dev.vars
 .env

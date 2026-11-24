@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
-  "name": "wavlark",
+  "name": "wavlark-web",
   "compatibility_date": "2026-11-19",
   "services": [
     { "binding": "API", "service": "wavlark-api" }

@@ -4,8 +4,8 @@
 
 Wavlark is a public file library. Any administrator can upload, publish, and delete files.
 The SvelteKit Worker
-in `web/` (`wavlark`) renders the catalog. Its `API` service binding calls the Rust Worker in
-`worker/` (`wavlark-api`) for publication, catalog queries, and signed file transfers.
+in `web/` (`wavlark-web`) renders the catalog. Its `API` service binding calls the Rust Worker in
+`api/` (`wavlark-api`) for publication, catalog queries, and signed file transfers.
 
 ## Run locally
 
@@ -24,7 +24,7 @@ busy. To choose a different starting port, run `mise run dev --port 5200`.
 To manage files locally, start `mise run dev:admin` and open **Manage files**.
 You sign in as `admin@example.com` without a Cloudflare account. Use `mise run dev` for the signed-out view.
 
-Setup initializes `worker/.dev.vars` for the R2 emulator and applies the
+Setup initializes `api/.dev.vars` for the R2 emulator and applies the
 local D1 migrations. Each checkout keeps its D1 and R2 data in
 `.wrangler/state`. A fresh catalog is empty. `GET /api/health` returns
 `{"status":"ok"}`.
@@ -66,7 +66,7 @@ Create one Cloudflare Access self-hosted application for `/manage` and
 `/api/manage` on the site's hostname. In the Allow policy, set **Include → Emails** to
 the email addresses of everyone who should manage the library. Child paths [inherit the policy](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/#policy-inheritance).
 
-In the `vars` section of `worker/wrangler.jsonc`, set `ACCESS_ISSUER` to the
+In the `vars` section of `api/wrangler.jsonc`, set `ACCESS_ISSUER` to the
 team origin (e.g. `https://your-team.cloudflareaccess.com`, without a trailing
 slash) and `ACCESS_AUD` to the application's audience tag. Open **Manage files**
 on the deployed site and sign in to see your email.

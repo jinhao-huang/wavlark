@@ -9,15 +9,15 @@ rust = { version = "1.97.1", targets = "wasm32-unknown-unknown" }
 dev = "pnpm dev"
 "dev:admin" = "pnpm dev --mode admin"
 build = "pnpm build"
-"wrangler:local" = "pnpm exec wrangler --config worker/wrangler.jsonc --local --persist-to .wrangler/state"
+"wrangler:local" = "pnpm exec wrangler --config api/wrangler.jsonc --local --persist-to .wrangler/state"
 
 [tasks.setup]
 run = [
   "pnpm install --frozen-lockfile",
-  "test -f worker/.dev.vars || cp worker/.dev.vars.example worker/.dev.vars",
+  "test -f api/.dev.vars || cp api/.dev.vars.example api/.dev.vars",
   "mise run wrangler:local d1 migrations apply DB",
 ]
 
 [tasks.test]
-dir = "worker"
+dir = "api"
 run = ["pnpm --dir ../web run build", "node --test tests/*.test.mjs"]

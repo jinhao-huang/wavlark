@@ -33,9 +33,9 @@ const localApi = {
     }
     // Vite loads a new config before closing the old server on restart.
     const api = globalThis.wavlarkDevApi ??= await startWorker({
-      config: '../worker/wrangler.jsonc',
+      config: '../api/wrangler.jsonc',
       bindings,
-      build: { custom: { workingDirectory: '../worker' } },
+      build: { custom: { workingDirectory: '../api' } },
       dev: {
         server: { hostname: '127.0.0.1', port: 0 },
         registry,
