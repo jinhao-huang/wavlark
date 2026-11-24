@@ -35,8 +35,11 @@ test('upload, publish, delete and reuse file paths', async (t) => {
   const manage = (id, action, method, jwt) => app.fetch(`/api/manage/resources/${id}/${action}`, {
     method, headers: { Origin: url.origin, 'Cf-Access-Jwt-Assertion': jwt }
   });
+  const headers = { 'Cf-Access-Jwt-Assertion': otherAdmin };
+  const draftList = async () => (await (await app.fetch('/api/manage/resources', { headers })).json()).drafts;
   const publish = (id, jwt = token) => manage(id, 'publication', 'PUT', jwt);
   const renew = (id, jwt = token) => manage(id, 'upload', 'POST', jwt);
+  const discard = (id, jwt = token) => manage(id, 'upload', 'DELETE', jwt);
   const put = (ticket, body) => fetch(ticket.url, { method: 'PUT', headers: ticket.headers, body });
 
   assert.equal((await create({}, '')).status, 401);
@@ -84,9 +87,10 @@ test('upload, publish, delete and reuse file paths', async (t) => {
   assert.equal((await put(root, '')).status, 200);
   const missing = await (await create({ directory: 'empty' })).json();
   await FILES.put(missing.id, 'unexpected size');
-  assert.equal((await publish(missing.id)).status, 409);
+  assert.equal((await publish(missing.id)).status, 422);
 
   assert.equal((await publish(upload.id, otherAdmin)).status, 204);
+  assert.equal((await discard(upload.id)).status, 404);
   assert.equal((await publish(upload.id, otherAdmin)).status, 204);
   assert.equal((await renew(upload.id)).status, 409);
   assert.equal((await create()).status, 409);
@@ -109,6 +113,7 @@ test('upload, publish, delete and reuse file paths', async (t) => {
   assert.equal((await renew(missing.id)).status, 410);
   assert.equal((await publish(missing.id)).status, 410);
   assert.equal((await create({ directory: 'empty' })).status, 409);
+  assert.ok(!(await draftList()).some(row => row.id === abandoned.id || row.id === missing.id));
   await api.scheduled({ cron: '*/5 * * * *' });
   assert.equal(await FILES.get(missing.id), null);
   assert.ok(await FILES.head(root.id));
@@ -127,7 +132,6 @@ test('upload, publish, delete and reuse file paths', async (t) => {
   assert.ok(await FILES.head(root.id));
   assert.ok(await FILES.head('unmanaged'));
 
-  const headers = { 'Cf-Access-Jwt-Assertion': otherAdmin };
   const remove = (id, jwt = token) => app.fetch('/api/manage/resources/' + id, {
     method: 'DELETE', headers: { Origin: url.origin, 'Cf-Access-Jwt-Assertion': jwt }
   });
@@ -136,6 +140,7 @@ test('upload, publish, delete and reuse file paths', async (t) => {
   assert.deepEqual(adminList.resources, [{ ...catalog.resources[0], id: upload.id }]);
   assert.ok(!('id' in catalog.resources[0]));
   assert.ok(!('email' in catalog));
+  assert.ok(!('drafts' in catalog));
   const adminPage = await app.fetch('/manage', { headers });
   assert.ok((await adminPage.text()).includes(`aria-label="Delete ${path}"`));
   assert.equal((await remove(upload.id, '')).status, 401);
@@ -185,4 +190,48 @@ test('upload, publish, delete and reuse file paths', async (t) => {
   assert.equal((await remove(next.id)).status, 204);
   const latest = await app.fetch('/download/' + encoded, { redirect: 'manual' });
   assert.equal(await (await fetch(latest.headers.get('Location'))).text(), 'final');
+
+  // Reopen a draft from another administrator's session after leaving the form.
+  const draftFields = { directory: 'recovery' };
+  const draft = await (await create(draftFields)).json();
+  const recovered = (await draftList()).find(row => row.id === draft.id);
+  assert.equal(recovered.path, draft.path);
+  assert.equal(recovered.size_bytes, 5);
+  assert.equal(recovered.description, 'A sample file');
+  assert.ok(recovered.expires_at > Date.now() / 1000);
+  assert.equal((await publish(draft.id, otherAdmin)).status, 409);
+  const recoveredTicket = await (await renew(recovered.id, otherAdmin)).json();
+  assert.equal((await put(recoveredTicket, 'draft')).status, 200);
+  const reopened = await (await app.fetch('/manage', { headers })).text();
+  assert.ok(reopened.includes('Unpublished drafts') && reopened.includes(draft.path));
+  assert.equal((await discard(draft.id, '')).status, 401);
+  assert.equal((await discard(draft.id, otherAdmin)).status, 204);
+  assert.equal(await FILES.head(draft.id), null);
+  assert.equal((await publish(draft.id)).status, 404);
+  assert.ok(!(await draftList()).some(row => row.id === draft.id));
+
+  const reused = await (await create(draftFields)).json();
+  assert.notEqual(reused.id, draft.id);
+  assert.equal((await put(reused, 'fresh')).status, 200);
+  assert.equal((await publish(reused.id, otherAdmin)).status, 204);
+  assert.equal((await discard(reused.id)).status, 404);
+  assert.equal((await discard(draft.id)).status, 404);
+  assert.equal((await put(recoveredTicket, 'later')).status, 200);
+  await api.scheduled({ cron: '0 3 * * *' });
+  assert.equal(await FILES.head(draft.id), null);
+  assert.equal(await (await FILES.get(reused.id)).text(), 'fresh');
+
+  const race = await (await create({ directory: 'two-admins' })).json();
+  assert.equal((await put(race, 'hello')).status, 200);
+  const [publication, removal] = await Promise.all([publish(race.id), discard(race.id, otherAdmin)]);
+  if (publication.status === 204) {
+    assert.equal(removal.status, 404);
+    assert.equal(await (await FILES.get(race.id)).text(), 'hello');
+    assert.equal((await app.fetch('/download/two-admins/' + encodeURIComponent(name), { redirect: 'manual' })).status, 302);
+  } else {
+    assert.ok([404, 409, 410].includes(publication.status));
+    assert.equal(removal.status, 204);
+    assert.equal(await FILES.head(race.id), null);
+    assert.equal(await DB.prepare('SELECT id FROM resources WHERE id = ?').bind(race.id).first(), null);
+  }
 });

@@ -176,8 +176,8 @@ pub async fn publish(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
         };
         if file.size() != record.size_bytes {
             return Response::error(
-                "The stored file has the wrong size. Upload to a different path.",
-                409,
+                "The stored file has the wrong size. Discard the draft and upload it again.",
+                422,
             );
         }
         // A repeated confirmation succeeds, even when another request just published it.
@@ -186,7 +186,7 @@ pub async fn publish(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
              WHERE id = ? AND (published_at IS NOT NULL OR expires_at > unixepoch()) RETURNING id"
         ).bind(&[record.id.into()])?.first::<String>(Some("id")).await?;
         if updated.is_none() {
-            return expired();
+            return Response::error("This draft is no longer available.", 410);
         }
     }
     Ok(Response::empty()?.with_status(204))

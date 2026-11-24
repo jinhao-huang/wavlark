@@ -25,7 +25,8 @@ export function sendFile(upload, file, onProgress) {
     xhr.upload.onprogress = ({ loaded }) => onProgress(loaded);
     xhr.onload = () => {
       // A previous PUT may have succeeded before its response was lost.
-      if ((xhr.status >= 200 && xhr.status < 300) || xhr.status === 412) resolve();
+      if (xhr.status >= 200 && xhr.status < 300) resolve(true);
+      else if (xhr.status === 412) resolve(false);
       else if (xhr.status === 403) reject(new Error('Upload authorization failed. Retry to get a new upload link.'));
       else reject(new Error('Upload failed. Please try again.'));
     };

@@ -1,101 +1,105 @@
 <script>
-  import { goto } from '$app/navigation';
+  import { invalidateAll } from '$app/navigation';
   import Button from '#lib/components/ui/button/button.svelte';
-  import { encodePath } from '#lib/catalog.js';
   import { requestUpload, sendFile } from '#lib/upload.js';
 
+  let { draft, onrefresh, onuploaded = onrefresh, busy = $bindable(false) } = $props();
   let files = $state();
   let directory = $state('');
   let description = $state('');
   let requestId;
-  let upload = $state(null);
-  let phase = $state('ready');
-  let sent = $state(0);
+  let pendingId;
+  let sent = $state(null);
   let message = $state('');
-  let busy = $derived(phase === 'starting' || phase === 'uploading' || phase === 'publishing');
 
   function reset() {
     requestId = undefined;
-    upload = null;
-    phase = 'ready';
+    pendingId = undefined;
     message = '';
-    sent = 0;
-  }
-
-  async function publish() {
-    phase = 'publishing';
-    message = '';
-    try {
-      const response = await fetch(`/api/manage/resources/${upload.id}/publication`, { method: 'PUT' });
-      if ([404, 409, 410].includes(response.status)) {
-        if (response.status !== 409) upload = null;
-        phase = 'ready';
-        message = await response.text();
-        return;
-      }
-      if (response.status !== 204) throw new Error();
-      await goto(`/resources/${encodePath(upload.path)}`, { refreshAll: true });
-    } catch {
-      phase = 'uploaded';
-      message = 'Publication could not be confirmed. Try confirming again.';
-    }
   }
 
   async function submit(event) {
     event.preventDefault();
     const file = files?.[0];
     if (!file || busy) return;
-    if (phase === 'uploaded') return publish();
+    if (draft && (file.name !== draft.path.split('/').pop() || file.size !== draft.size_bytes)) {
+      message = 'Choose the original file with the same name and size.';
+      return;
+    }
+    busy = true;
     message = '';
+    sent = null;
+    const draftId = draft?.id ?? pendingId;
+    let ticket;
+    let written;
     try {
-      phase = 'starting';
-      requestId ??= crypto.randomUUID();
-      upload = await requestUpload(file, directory, description, requestId, upload?.id);
+      if (!draftId) requestId ??= crypto.randomUUID();
+      ticket = await requestUpload(file, directory, description, requestId, draftId);
+      pendingId = ticket.id;
       sent = 0;
-      phase = 'uploading';
-      await sendFile(upload, file, (bytes) => sent = bytes);
-      phase = 'uploaded';
+      written = await sendFile(ticket, file, (bytes) => sent = bytes);
     } catch (error) {
-      if ([404, 410].includes(error.cause)) upload = null;
       message = error.message;
-      phase = 'ready';
+      try {
+        if (draftId && [404, 409, 410].includes(error.cause)) {
+          reset();
+          await onrefresh(error.message);
+        } else if (ticket && !draft) {
+          await invalidateAll();
+        }
+      } catch {
+        message = `${error.message} Reload Manage files to refresh the draft list.`;
+      }
+      busy = false;
+      return;
+    }
+    if (!draft) {
+      files = new DataTransfer().files;
+      directory = '';
+      description = '';
+      reset();
+    }
+    try {
+      await onuploaded(written
+        ? `Uploaded “${ticket.path}”. Confirm publication when ready.`
+        : `“${ticket.path}” already has a file. Confirm the existing file, or discard the draft to upload a replacement.`);
+    } catch {
+      message = 'Reload Manage files to confirm publication.';
+    } finally {
+      busy = false;
     }
   }
 </script>
 
-<form class="mt-8 grid max-w-xl gap-5" onsubmit={submit}>
+<form class="mt-4 grid max-w-xl gap-4" onsubmit={submit}>
   <label class="grid gap-2 font-semibold">
-    File
+    {draft ? 'Original file' : 'File'}
     <input type="file" required bind:files onchange={reset} disabled={busy}
       class="rounded-md border border-line bg-white p-3 text-sm font-normal file:mr-3 file:font-semibold" />
   </label>
-  <label class="grid gap-2 font-semibold">
-    Directory (optional)
-    <input type="text" placeholder="e.g. Maps/Europe" bind:value={directory} oninput={reset} disabled={busy}
-      class="rounded-md border border-line bg-white p-3 text-sm font-normal" />
-  </label>
-  <label class="grid gap-2 font-semibold">
-    Description (optional)
-    <textarea rows="3" bind:value={description} oninput={reset} disabled={busy || !!upload}
-      class="rounded-md border border-line bg-white p-3 font-normal"></textarea>
-  </label>
+  {#if !draft}
+    <label class="grid gap-2 font-semibold">
+      Directory (optional)
+      <input type="text" placeholder="e.g. Maps/Europe" bind:value={directory} oninput={reset} disabled={busy}
+        class="rounded-md border border-line bg-white p-3 font-normal" />
+    </label>
+    <label class="grid gap-2 font-semibold">
+      Description (optional)
+      <textarea rows="3" bind:value={description} oninput={reset} disabled={busy}
+        class="rounded-md border border-line bg-white p-3 font-normal"></textarea>
+    </label>
+  {/if}
   <div aria-live="polite">
-    {#if phase === 'starting'}
+    {#if busy && sent === null}
       Preparing upload…
-    {:else if phase === 'uploading'}
+    {:else if busy && files?.length}
       <progress aria-label="File upload" value={sent} max={files[0].size || 1}></progress>
       {Math.floor(sent / (files[0].size || 1) * 100)}%
-    {:else if phase === 'publishing'}
-      Confirming publication…
-    {:else if message}
+    {:else}
       {message}
-    {:else if phase === 'uploaded'}
-      Uploaded to {upload.path}. Confirm publication within 24 hours of starting the draft.
     {/if}
   </div>
   <Button type="submit" class="justify-self-start" disabled={!files?.length || busy}>
-    {#if phase === 'uploaded' || phase === 'publishing'}Confirm publication
-    {:else if message}Retry upload
-    {:else}Upload file{/if}
+    {draft ? 'Upload again' : 'Upload file'}
   </Button>
 </form>

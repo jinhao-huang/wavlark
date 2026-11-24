@@ -39,9 +39,12 @@ empty for the root, or enter a path such as `Maps/Europe`. You can add a
 description. Select **Upload file**, then **Confirm publication** to make the
 file public. Share its details page, for example `/resources/Maps/Europe/atlas.pdf`.
 
-Uploads reserve their path. A retry in the same form gets a fresh upload link
-for the original draft. Unpublished drafts expire after 24 hours. Scheduled
-cleanup deletes their files and releases their paths.
+Uploads reserve their path. Any administrator can reopen **Manage files →
+Unpublished drafts** and confirm a completed upload.
+If the transfer was interrupted, select **Re-upload file** and choose the original
+file to upload it from the beginning. A retry keeps any file already uploaded to
+the draft. To replace it, confirm **Discard draft** and upload the new file at the freed path.
+Drafts expire 24 hours after creation. Scheduled cleanup removes their files and releases their paths.
 
 Under **Published files**, select **Delete** and confirm. The share link stops
 working immediately. Publishing a new file at the same path makes that link open
