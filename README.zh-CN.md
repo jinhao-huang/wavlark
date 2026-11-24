@@ -24,7 +24,7 @@ mise run dev
 
 ## 管理文件
 
-打开 **Manage files**，选择一个不超过 100 MiB 的文件。**Directory** 留空表示根目录，也可以填写 `地图/杭州` 这样的多级目录。按需填写说明，点击 **Upload file**，再点击 **Confirm publication** 公开文件。访客可以通过详情页链接访问资源，例如 `/resources/地图/杭州/交通图.pdf`。
+在 **Manage files → Upload a file** 中选择一个不超过 100 MiB 的文件。**Directory** 留空表示根目录，也可以填写 `地图/杭州` 这样的多级目录。按需填写说明，点击 **Upload file**，再点击 **Confirm publication** 公开文件。访客可以通过详情页链接访问资源，例如 `/resources/地图/杭州/交通图.pdf`。
 
 开始上传后，草稿会占用所选路径。在同一表单中重试，会为原草稿签发新的上传链接。未发布的草稿在 24 小时后过期，定时任务随后删除文件并释放路径。
 
@@ -34,7 +34,12 @@ mise run dev
 
 ### 部署 Worker
 
-在生产环境的 Cloudflare 账户下，准备名为 `wavlark` 的 D1 数据库和名为 `wavlark-files` 的私有 R2 桶。桶使用默认辖区，由本站独占。已有符合条件的同名资源可直接使用，Wrangler 会按名称查找数据库。完成本地初始化后，在仓库根目录登录该账户并部署。
+在同一 Cloudflare 账户下准备以下资源。已有符合条件的同名资源可直接使用。
+
+- 打开 [D1 SQL Database](https://dash.cloudflare.com/?to=/:account/workers/d1)，点 **Create Database**，名称填 `wavlark`，位置由 Cloudflare 自动选择。Wrangler 会按名称查找数据库。
+- 打开 [R2 Object Storage](https://dash.cloudflare.com/?to=/:account/r2/overview)，如提示开通 R2，先完成开通。点 **Create bucket**，名称填 `wavlark-files`，位置选自动，不指定司法辖区。存储类别保留 **Standard**，公开访问保持关闭，桶由本站独占。
+
+完成本地初始化后，在仓库根目录登录该账户并部署。如果 Wrangler 提示注册 `workers.dev` 子域，选 **Yes**，为账户填一个可用的子域名。
 
 ```sh
 mise exec -- pnpm exec wrangler login
@@ -53,7 +58,7 @@ mise run deploy
 
 ### 允许浏览器上传
 
-打开 **R2 Object Storage → wavlark-files → Settings → CORS Policy**，选择 **Add CORS policy**（已有策略则编辑），切到 **JSON**。粘贴下面的规则，把 `https://files.example.com` 换成你打开管理页时用的网址，只保留协议和域名，末尾不加斜杠，然后点 **Save**。例如，管理页是 `https://wavlark-web.my-team.workers.dev/manage`，这里就填 `https://wavlark-web.my-team.workers.dev`。[Cloudflare R2 控制台说明](https://developers.cloudflare.com/r2/buckets/cors/#add-cors-policies-from-the-dashboard)
+打开 **R2 Object Storage → wavlark-files → Settings → CORS Policy**，选择 **Add CORS policy**（已有策略则编辑），切到 **JSON**。新建时粘贴下面的规则。已有这条规则时，在 `AllowedOrigins` 中追加新来源，保留原有条目。把示例中的 `https://files.example.com` 换成管理页的协议和域名，末尾不加斜杠，然后点 **Save**。例如，管理页是 `https://wavlark-web.my-team.workers.dev/manage`，这里就填 `https://wavlark-web.my-team.workers.dev`。[Cloudflare R2 控制台说明](https://developers.cloudflare.com/r2/buckets/cors/#add-cors-policies-from-the-dashboard)
 
 ```json
 [
@@ -67,20 +72,22 @@ mise run deploy
 
 ### 配置管理员登录
 
-打开 **Zero Trust → Access controls → Applications → Create new application**，选择 **Self-hosted and private → Public DNS** 并继续。在 **Destinations** 下用 **Add public hostname** 添加两条记录，域名都填 Web 站点域名。第一条的 **Path** 填 `manage`，第二条填 `api/manage`。这样管理页和管理 API 需要登录，首页保持公开。选择管理员可用的登录方式，添加 **Allow** 策略，在 **Include → Emails** 中填写管理员邮箱，然后保存应用。[Cloudflare 路径保护说明](https://developers.cloudflare.com/workers/configuration/cloudflare-access/#protect-a-specific-hostname-custom-domain-or-path)
+首次打开 **Zero Trust** 时，按提示创建组织并设置团队名称。新组织默认使用 **Cloudflare** 登录，适用于已加入该 Cloudflare 账户的管理员。要让其他获准的管理员用邮箱验证码登录，先到 **Integrations → Identity providers → Add new identity provider** 启用 **One-time PIN**。[Cloudflare 登录方式说明](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/)
+
+打开 **Zero Trust → Access controls → Applications → Create new application**，选择 **Self-hosted and private → Public DNS** 并继续。在 **Destinations** 下用 **Add public hostname** 添加两条记录，域名都填 Web 站点域名。第一条的 **Path** 填 `manage`，第二条填 `api/manage`。添加 **Allow** 策略，在 **Include → Emails** 中填写管理员邮箱。为这个应用启用前面选定的登录方式，然后保存。[Cloudflare 路径保护说明](https://developers.cloudflare.com/workers/configuration/cloudflare-access/#protect-a-specific-hostname-custom-domain-or-path)
 
 ### 配置 API 变量和密钥
 
-打开 **R2 Object Storage → Overview → Account Details → API Tokens → Manage**，创建 R2 令牌，权限选 **Object Read & Write**，范围只选 `wavlark-files`。复制创建结果中的 **Access Key ID** 和 **Secret Access Key**，后者只显示这一次。[R2 凭据和端点说明](https://developers.cloudflare.com/r2/api/tokens/)
+打开 [R2 API Tokens 页面](https://dash.cloudflare.com/?to=/:account/r2/api-tokens)，选择 `wavlark-files` 所在的账户。点 **Create Account API token**，权限选 **Object Read & Write**，范围只选 `wavlark-files`。创建后复制 **Access Key ID** 和 **Secret Access Key**，后者只显示这一次。
 
-打开 **Workers & Pages → wavlark-api → Settings → Variables and Secrets**，按下表逐行添加，再点 **Deploy** 使设置生效。后续发布会保留这些值。
+打开 **Workers & Pages → wavlark-api → Settings → Variables and Secrets**，点 **Add**。下表五项的环境都只选 **Production**，**Secret** 按表中标注设置。填好后点 **Deploy**，后续发布会保留这些设置。
 
-| 类型 | 名称 | 填写内容 |
+| 名称 | 勾选 Secret | 填写内容 |
 | --- | --- | --- |
-| Text | `R2_ENDPOINT` | 从 R2 令牌创建成功页面底部复制 S3 端点，只保留协议和域名，形如 `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`。 |
-| Text | `ACCESS_ISSUER` | 在 **Zero Trust → Settings → Team name and domain** 找到团队域名，填成 `https://your-team.cloudflareaccess.com`，末尾不加斜杠。 |
-| Text | `ACCESS_AUD` | 编辑刚创建的 Access 应用，在 **Additional settings** 中复制 **Application Audience (AUD) Tag**。 |
-| Secret | `R2_ACCESS_KEY_ID` | R2 令牌创建结果中的 **Access Key ID**。 |
-| Secret | `R2_SECRET_ACCESS_KEY` | 同一令牌的 **Secret Access Key**。 |
+| `R2_ENDPOINT` | 否 | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`，将 `<ACCOUNT_ID>` 换成桶所属的 Cloudflare 账户 ID。[查找账户 ID](https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/) |
+| `ACCESS_ISSUER` | 否 | 在 **Zero Trust → Settings → Team name and domain** 找到团队域名，填成 `https://your-team.cloudflareaccess.com`，末尾不加斜杠。 |
+| `ACCESS_AUD` | 否 | 编辑 Wavlark 的 Access 应用，在 **Additional settings** 中展开 **Application Audience (AUD) Tag**，复制里面 **Token** 字段的完整值。 |
+| `R2_ACCESS_KEY_ID` | 是 | R2 令牌创建结果中的 **Access Key ID**。 |
+| `R2_SECRET_ACCESS_KEY` | 是 | 同一令牌的 **Secret Access Key**。 |
 
 打开 **Manage files** 并登录，核对页面显示的邮箱，再上传并发布一个小文件。用浏览器无痕窗口打开首页，确认访客无需登录即可下载该文件。

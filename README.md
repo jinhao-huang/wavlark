@@ -34,7 +34,7 @@ to verify the management page and API with temporary signed credentials.
 
 ## Manage files
 
-In **Manage files**, choose a file of up to 100 MiB. Leave **Directory**
+Under **Manage files → Upload a file**, choose a file of up to 100 MiB. Leave **Directory**
 empty for the root, or enter a path such as `Maps/Europe`. You can add a
 description. Select **Upload file**, then **Confirm publication** to make the
 file public. Share its details page, for example `/resources/Maps/Europe/atlas.pdf`.
@@ -53,10 +53,13 @@ within five minutes.
 
 ### Deploy the Workers
 
-In the target Cloudflare account, create or reuse the D1 database `wavlark` and
-a private R2 bucket named `wavlark-files` in the default jurisdiction, dedicated to this library. Wrangler
-resolves the database by name. After local setup, sign in to that account and
-deploy from the repository root.
+Prepare these resources in the same Cloudflare account. Reuse them if they already exist.
+
+- In [D1 SQL Database](https://dash.cloudflare.com/?to=/:account/workers/d1), select **Create Database**, name it `wavlark`, and use automatic placement. Wrangler finds it by name.
+- In [R2 Object Storage](https://dash.cloudflare.com/?to=/:account/r2/overview), activate R2 if prompted. Select **Create bucket**, name it `wavlark-files`, and use automatic location with no jurisdiction restriction. Keep the **Standard** storage class and leave public access disabled. Dedicate this bucket to the library.
+
+After local setup, sign in to that account and deploy from the repository root.
+If Wrangler asks to register a `workers.dev` subdomain, choose **Yes** and enter an available name for the account.
 
 ```sh
 mise exec -- pnpm exec wrangler login
@@ -90,7 +93,8 @@ entries. Keep both sets of entries if you want to manage files from either addre
 
 Open **R2 Object Storage → wavlark-files → Settings → CORS Policy**. Choose
 **Add CORS policy** (or edit the existing policy) and open the **JSON** tab.
-Paste the rule below, replace `https://files.example.com` with the origin of
+For a new policy, paste the rule below. If this rule already exists, add the origin to its
+`AllowedOrigins` array and keep the other entries. Replace `https://files.example.com` with the origin of
 your management page, then select **Save**. For example, if you open
 `https://wavlark-web.my-team.workers.dev/manage`, enter
 `https://wavlark-web.my-team.workers.dev` with no path or trailing slash.
@@ -108,34 +112,38 @@ your management page, then select **Save**. For example, if you open
 
 ### Configure administrator access
 
+On your first visit to **Zero Trust**, complete onboarding and choose a team name.
+In a new organization, administrators who belong to your Cloudflare account can use the default **Cloudflare** login.
+To let other approved administrators sign in by email code, enable **One-time PIN** under **Integrations → Identity providers → Add new identity provider**.
+[Cloudflare login methods](https://developers.cloudflare.com/cloudflare-one/integrations/identity-providers/one-time-pin/)
+
 Under **Zero Trust → Access controls → Applications → Create new application**,
 select **Self-hosted and private → Public DNS** and continue. Under **Destinations**,
 use **Add public hostname** to add two entries for the same Web hostname.
 Enter `manage` in the first **Path** field and `api/manage` in the second.
-This keeps the homepage public. Choose a
-login method your administrators can use and add an **Allow** policy with
-**Include → Emails** set to their addresses. Save the application.
+Add an **Allow** policy with **Include → Emails** set to your administrators' addresses.
+Enable the chosen login method for this application and save it.
 [Cloudflare Access for Worker paths](https://developers.cloudflare.com/workers/configuration/cloudflare-access/#protect-a-specific-hostname-custom-domain-or-path)
 
 ### Set the API variables and secrets
 
-In **R2 Object Storage → Overview → Account Details → API Tokens → Manage**,
-create an R2 token with **Object Read & Write** access scoped to
-`wavlark-files`. Copy the **Access Key ID** and **Secret Access Key** from the
-result. The secret access key is shown only once.
-[R2 credentials and endpoints](https://developers.cloudflare.com/r2/api/tokens/)
+Open the [R2 API Tokens page](https://dash.cloudflare.com/?to=/:account/r2/api-tokens)
+in the account that owns `wavlark-files`. Select **Create Account API token**,
+choose **Object Read & Write**, and limit access to `wavlark-files`. After
+creating the token, copy the **Access Key ID** and **Secret Access Key**.
+The secret access key is shown only once.
 
 Open **Workers & Pages → wavlark-api → Settings → Variables and Secrets**.
-Add each row separately and select **Deploy** to apply the settings.
-Subsequent releases preserve these values.
+Select **Add**. For all five entries, select **Production** only and set
+**Secret** as shown below. Select **Deploy** to apply the settings. Subsequent releases preserve them.
 
-| Type | Name | Value |
+| Name | Secret | Value |
 | --- | --- | --- |
-| Text | `R2_ENDPOINT` | Copy the S3 endpoint from the bottom of the R2 token confirmation page, e.g. `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`. Use only the scheme and hostname. |
-| Text | `ACCESS_ISSUER` | The team domain from **Zero Trust → Settings → Team name and domain**, formatted as `https://your-team.cloudflareaccess.com` with no trailing slash. |
-| Text | `ACCESS_AUD` | In the Access application's **Edit → Additional settings**, copy **Application Audience (AUD) Tag**. |
-| Secret | `R2_ACCESS_KEY_ID` | **Access Key ID** from the R2 token. |
-| Secret | `R2_SECRET_ACCESS_KEY` | **Secret Access Key** from the same token. |
+| `R2_ENDPOINT` | No | `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`. Replace `<ACCOUNT_ID>` with the ID of the Cloudflare account that owns the bucket. [Find your account ID](https://developers.cloudflare.com/fundamentals/account/find-account-and-zone-ids/) |
+| `ACCESS_ISSUER` | No | The team domain from **Zero Trust → Settings → Team name and domain**, formatted as `https://your-team.cloudflareaccess.com` with no trailing slash. |
+| `ACCESS_AUD` | No | Edit the Wavlark Access application. Under **Additional settings**, expand **Application Audience (AUD) Tag** and copy the entire value shown in the **Token** field. |
+| `R2_ACCESS_KEY_ID` | Yes | **Access Key ID** from the R2 token. |
+| `R2_SECRET_ACCESS_KEY` | Yes | **Secret Access Key** from the same token. |
 
 Open **Manage files**, sign in, and check the email shown on the page. Upload
 and publish a small file. In a private browser window, open the homepage and
