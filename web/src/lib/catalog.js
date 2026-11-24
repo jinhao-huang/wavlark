@@ -1,5 +1,11 @@
 import { error } from '@sveltejs/kit';
 
+export function encodePath(path) {
+  const encoded = path.split('/').map(encodeURIComponent).join('/');
+  // A trailing slash keeps these filenames distinct from SvelteKit's own requests.
+  return /(^|\/|\.html)__(data\.json|route\.js)$/.test(encoded) ? encoded + '/' : encoded;
+}
+
 export async function readCatalog(fetch, path) {
   const response = await fetch(path);
   if (!response.ok) {

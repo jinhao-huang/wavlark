@@ -6,18 +6,11 @@ Wavlark 是一个公共文件分享站。`web/` 下的 SvelteKit Worker（`wavla
 
 ## 本地运行
 
-安装 [mise](https://mise.jdx.dev/) 后，在仓库根目录运行以下命令，初始化新检出的项目。
+安装 [mise](https://mise.jdx.dev/) 后，在仓库根目录初始化项目并启动开发服务器。
 
 ```sh
 mise trust
 mise run setup
-```
-
-如果仓库根目录已有旧版 `.dev.vars`，请将自定义值复制到 `worker/.dev.vars`。本地 R2 地址使用 [worker/.dev.vars.example](worker/.dev.vars.example) 中的值。
-
-启动开发服务器：
-
-```sh
 mise run dev
 ```
 
@@ -31,13 +24,15 @@ mise run dev
 
 ## 发布文件
 
-打开 **Publisher workspace**，选择一个不超过 100 MiB 的文件，按需填写说明，然后点击 **Upload file**。浏览器会将文件直接传入私有 R2 桶。点击 **Confirm publication** 后，访客就能在首页找到该文件。可以分享详情页链接，也可以点击 **Download file** 下载原文件。
+打开 **Publisher workspace**，选择一个不超过 100 MiB 的文件。**Directory** 留空表示根目录，也可以填写 `地图/杭州` 这样的多级目录。按需填写说明，点击 **Upload file**，再点击 **Confirm publication** 公开文件。访客可以通过详情页链接访问资源，例如 `/resources/地图/杭州/交通图.pdf`。
+
+开始上传后，草稿会占用所选路径。在同一表单中重试，会为原草稿签发新的上传链接。未发布的草稿在 24 小时后过期，定时任务随后删除文件并释放路径。
 
 ## 生产环境存储配置
 
-在 Rust Worker 中，将 `R2_ENDPOINT` 设为当前账户的 R2 S3 完整地址，将 `R2_BUCKET_NAME` 设为私有桶名称。为签名凭据授予该桶的 **Object Read & Write** 权限，通过 Worker secrets 配置 `R2_ACCESS_KEY_ID` 和 `R2_SECRET_ACCESS_KEY`。
+为这个 D1 数据库单独使用一个私有 R2 桶。在 Rust Worker 中，将 `R2_ENDPOINT` 设为当前账户的 R2 S3 完整地址，`R2_BUCKET_NAME` 设为桶名。为签名凭据授予该桶的 **Object Read & Write** 权限，通过 Worker secrets 配置 `R2_ACCESS_KEY_ID` 和 `R2_SECRET_ACCESS_KEY`。
 
-在[桶的 CORS 配置](https://developers.cloudflare.com/r2/buckets/cors/)中，允许站点来源发送 `PUT` 请求，并允许 `Content-Type`、`Content-Disposition` 和 `If-None-Match` 请求头。部署后，用浏览器在站点上传一份文件，验证跨域配置。
+在[桶的 CORS 配置](https://developers.cloudflare.com/r2/buckets/cors/)中，允许站点来源发送 `PUT` 请求，并允许 `Content-Type`、`Content-Disposition`、`If-None-Match` 和 `x-amz-meta-wavlark` 请求头。部署后，用浏览器在站点上传一份文件，验证跨域配置。
 
 ## 发布者登录
 

@@ -19,8 +19,20 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             Response::from_json(&json!({ "status": "ok" }))
         })
         .get_async("/api/resources", catalog::list)
-        .get_async("/api/resources/:id", catalog::detail)
-        .get_async("/download/:id", catalog::download)
+        .get_async("/api/resources/*path", catalog::detail)
+        .get_async("/download/*path", catalog::download)
         .run(req, env)
         .await
+}
+
+#[event(scheduled)]
+async fn scheduled(event: ScheduledEvent, env: Env, _ctx: ScheduleContext) {
+    let result = if event.cron() == "0 3 * * *" {
+        uploads::clean_orphans(env).await
+    } else {
+        uploads::clean_expired(env).await
+    };
+    if let Err(error) = result {
+        console_error!("Storage cleanup failed: {error}");
+    }
 }

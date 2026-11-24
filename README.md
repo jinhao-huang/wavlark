@@ -13,15 +13,6 @@ With [mise](https://mise.jdx.dev/) installed, set up a fresh checkout from the r
 ```sh
 mise trust
 mise run setup
-```
-
-If your checkout has a `.dev.vars` at the repository root, copy any custom
-values into `worker/.dev.vars`. For local R2, use the endpoint from
-`worker/.dev.vars.example`.
-
-Start the local server:
-
-```sh
 mise run dev
 ```
 
@@ -42,21 +33,25 @@ Run `mise run build` to build and dry-run both Workers locally.
 
 ## Publish a file
 
-In **Publisher workspace**, choose a file of up to 100 MiB, optionally enter a
-description, and select **Upload file**. The browser uploads directly to the
-private R2 bucket. Select **Confirm publication** to add it to the public
-catalog. Share the details page or use **Download file** to save the original.
+In **Publisher workspace**, choose a file of up to 100 MiB. Leave **Directory**
+empty for the root, or enter a path such as `Maps/Europe`. You can add a
+description. Select **Upload file**, then **Confirm publication** to make the
+file public. Share its details page, for example `/resources/Maps/Europe/atlas.pdf`.
+
+Uploads reserve their path. A retry in the same form gets a fresh upload link
+for the original draft. Unpublished drafts expire after 24 hours. Scheduled
+cleanup deletes their files and releases their paths.
 
 ## Production storage
 
-Configure the Rust Worker with the account's absolute R2 S3 endpoint in
-`R2_ENDPOINT` and the private bucket name in `R2_BUCKET_NAME`. Give the signing
+Use a private R2 bucket dedicated to this D1 database. Set `R2_ENDPOINT` to the
+account's absolute R2 S3 endpoint and `R2_BUCKET_NAME` to the bucket name. Give the signing
 credentials **Object Read & Write** access to this bucket and store them in
 Worker secrets `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`.
 
 In the [bucket CORS policy](https://developers.cloudflare.com/r2/buckets/cors/),
 allow the site's origin to send `PUT` with the headers `Content-Type`,
-`Content-Disposition`, and `If-None-Match`. Check the policy by uploading from
+`Content-Disposition`, `If-None-Match`, and `x-amz-meta-wavlark`. Check the policy by uploading from
 the deployed site in a browser.
 
 ## Publisher access

@@ -1,6 +1,6 @@
 <script>
   import Button from '#lib/components/ui/button/button.svelte';
-  import { formatDate, formatSize } from '#lib/catalog.js';
+  import { encodePath, formatDate, formatSize } from '#lib/catalog.js';
   let { data } = $props();
 </script>
 
@@ -10,12 +10,12 @@
 {#if data.resources.length}
   <table class="mt-10 w-full text-left">
     <thead class="border-b border-line text-sm muted">
-      <tr><th scope="col">File name</th><th scope="col">Size</th><th scope="col">Published</th></tr>
+      <tr><th scope="col">File path</th><th scope="col">Size</th><th scope="col">Published</th></tr>
     </thead>
     <tbody>
-      {#each data.resources as file (file.id)}
+      {#each data.resources as file (file.path)}
         <tr class="border-b border-line">
-          <td><a class="font-semibold text-primary hover:underline" href={'/resources/' + encodeURIComponent(file.id)}>{file.name}</a></td>
+          <td><a class="font-semibold text-primary hover:underline" href={'/resources/' + encodePath(file.path)}>{file.path}</a></td>
           <td>{formatSize(file.size_bytes)}</td>
           <td>{formatDate(file.published_at)}</td>
         </tr>

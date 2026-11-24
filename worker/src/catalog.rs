@@ -20,7 +20,7 @@ pub async fn list(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let mut resources = ctx
         .d1("DB")?
         .prepare(
-            "SELECT id, name, size_bytes, published_at FROM published_resources
+            "SELECT path, size_bytes, published_at FROM published_resources
                   ORDER BY published_at DESC, id DESC LIMIT ? OFFSET ?",
         )
         .bind(&[(PAGE_SIZE + 1).into(), offset.into()])?
@@ -32,12 +32,17 @@ pub async fn list(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     Response::from_json(&json!({ "resources": resources, "page": page, "has_next": has_next }))
 }
 
+fn public_path(ctx: &RouteContext<()>) -> std::borrow::Cow<'_, str> {
+    let path = ctx.param("path").expect("catalog route has a path");
+    percent_encoding::percent_decode_str(path.trim_end_matches('/')).decode_utf8_lossy()
+}
+
 pub async fn detail(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let id = ctx.param("id").expect("resource route has an id");
+    let path = public_path(&ctx);
     let resource = ctx
         .d1("DB")?
-        .prepare("SELECT * FROM published_resources WHERE id = ?")
-        .bind(&[id.as_str().into()])?
+        .prepare("SELECT path, description, size_bytes, published_at FROM published_resources WHERE path = ?")
+        .bind(&[path.as_ref().into()])?
         .first::<Value>(None)
         .await?;
     match resource {
@@ -47,11 +52,11 @@ pub async fn detail(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
 }
 
 pub async fn download(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let id = ctx.param("id").expect("download route has an id");
+    let path = public_path(&ctx);
     let published_id = ctx
         .d1("DB")?
-        .prepare("SELECT id FROM published_resources WHERE id = ?")
-        .bind(&[id.as_str().into()])?
+        .prepare("SELECT id FROM published_resources WHERE path = ?")
+        .bind(&[path.as_ref().into()])?
         .first::<String>(Some("id"))
         .await?;
     let Some(key) = published_id else {
