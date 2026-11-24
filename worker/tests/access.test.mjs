@@ -15,7 +15,7 @@ test('admin access through the web and API Workers', async (t) => {
   ] });
   t.after(() => app.close());
   await app.listen();
-  const email = 'publisher@example.com';
+  const email = 'admin@example.com';
   const headers = { 'Cf-Access-Jwt-Assertion': await sign() };
   const address = server.address();
   await server[Symbol.asyncDispose]();

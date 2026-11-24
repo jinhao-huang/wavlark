@@ -4,7 +4,7 @@ import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 
 export async function startLocalAccess() {
   const { privateKey, publicKey } = await generateKeyPair('RS256');
-  const header = { alg: 'RS256', kid: 'local-publisher' };
+  const header = { alg: 'RS256', kid: 'local-admin' };
   const keys = JSON.stringify({ keys: [{ ...await exportJWK(publicKey), ...header }] });
   const server = createServer((req, res) => {
     if (req.url !== '/cdn-cgi/access/certs') return res.writeHead(404).end();
@@ -19,7 +19,7 @@ export async function startLocalAccess() {
   function sign(overrides = {}, key = privateKey) {
     return new SignJWT({
       iss: issuer, aud: [audience], exp: Math.floor(Date.now() / 1000) + 300,
-      type: 'app', sub: 'local-publisher', email: 'publisher@example.com', ...overrides
+      type: 'app', sub: 'local-admin', email: 'admin@example.com', ...overrides
     }).setProtectedHeader(header).sign(key);
   }
 

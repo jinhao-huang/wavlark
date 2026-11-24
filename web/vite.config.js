@@ -14,9 +14,9 @@ const localApi = {
     process.env.WRANGLER_REGISTRY_PATH = registry;
     process.env.WRANGLER_LOG ??= 'warn';
     let bindings;
-    if (server.config.mode === 'publisher') {
+    if (server.config.mode === 'admin') {
       if (![undefined, false, 'localhost', '127.0.0.1', '::1'].includes(server.config.server.host)) {
-        throw new Error('Publisher mode requires a loopback host.');
+        throw new Error('Admin mode requires a loopback host.');
       }
       const access = globalThis.wavlarkDevAccess ??= await startLocalAccess();
       bindings = {

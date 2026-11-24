@@ -7,7 +7,7 @@ rust = { version = "1.97.1", targets = "wasm32-unknown-unknown" }
 
 [tasks]
 dev = "pnpm dev"
-"dev:publisher" = "pnpm dev --mode publisher"
+"dev:admin" = "pnpm dev --mode admin"
 build = "pnpm build"
 "wrangler:local" = "pnpm exec wrangler --config worker/wrangler.jsonc --local --persist-to .wrangler/state"
 

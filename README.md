@@ -2,7 +2,8 @@
 
 [简体中文](README.zh-CN.md)
 
-Wavlark is a public file library managed by one administrator. The SvelteKit Worker
+Wavlark is a public file library. Any administrator can upload and publish files.
+The SvelteKit Worker
 in `web/` (`wavlark`) renders the catalog. Its `API` service binding calls the Rust Worker in
 `worker/` (`wavlark-api`) for publication, catalog queries, and signed file transfers.
 
@@ -20,8 +21,8 @@ Open the URL printed by Vite. The catalog and signed downloads share this
 address. Vite starts on port 5173 and tries the next available port if it's
 busy. To choose a different starting port, run `mise run dev --port 5200`.
 
-To manage files locally, start `mise run dev:publisher` and open **Manage files**.
-You sign in as `publisher@example.com` without a Cloudflare account. Use `mise run dev` for the signed-out view.
+To manage files locally, start `mise run dev:admin` and open **Manage files**.
+You sign in as `admin@example.com` without a Cloudflare account. Use `mise run dev` for the signed-out view.
 
 Setup initializes `worker/.dev.vars` for the R2 emulator and applies the
 local D1 migrations. Each checkout keeps its D1 and R2 data in
@@ -57,7 +58,7 @@ the deployed site in a browser.
 
 Create one Cloudflare Access self-hosted application for `/manage` and
 `/api/manage` on the site's hostname. In the Allow policy, set **Include → Emails** to
-the administrator's exact email address only. Child paths [inherit the policy](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/#policy-inheritance).
+the email addresses of everyone who should manage the library. Child paths [inherit the policy](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/#policy-inheritance).
 
 In the `vars` section of `worker/wrangler.jsonc`, set `ACCESS_ISSUER` to the
 team origin (e.g. `https://your-team.cloudflareaccess.com`, without a trailing
