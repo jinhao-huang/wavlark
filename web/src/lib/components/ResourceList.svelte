@@ -1,14 +1,14 @@
 <script>
   import Button from '#lib/components/ui/button/button.svelte';
   import { encodePath, formatDate, formatSize } from '#lib/catalog.js';
-  let { data, base = '/', action } = $props();
+  let { data, base = '/', action, selection } = $props();
 </script>
 
 {#if data.resources.length}
   <table class="mt-5 w-full text-left">
     <thead class="border-b border-line text-sm muted">
       <tr>
-        <th scope="col">File path</th>
+        <th scope="col"><div class="flex items-center gap-3">{@render selection?.()} File path</div></th>
         <th scope="col">Size</th>
         <th scope="col">Published</th>
         {#if action}<th scope="col"><span class="sr-only">Actions</span></th>{/if}
@@ -17,7 +17,7 @@
     <tbody>
       {#each data.resources as file (file.path)}
         <tr class="border-b border-line">
-          <td><a class="font-semibold text-primary hover:underline" href={'/resources/' + encodePath(file.path)}>{file.path}</a></td>
+          <td><div class="flex items-baseline gap-3">{@render selection?.(file)}<a class="min-w-0 font-semibold text-primary hover:underline" href={'/resources/' + encodePath(file.path)}>{file.path}</a></div></td>
           <td>{formatSize(file.size_bytes)}</td>
           <td>{formatDate(file.published_at)}</td>
           {#if action}<td class="text-right">{@render action(file)}</td>{/if}

@@ -17,6 +17,10 @@ importers:
         version: 4.166.0(@types/node@24.19.2)
 
   web:
+    dependencies:
+      client-zip:
+        specifier: ^2.5.1
+        version: 2.5.1
     devDependencies:
       '@sveltejs/adapter-cloudflare':
         specifier: ^9.0.0
@@ -803,6 +807,9 @@ packages:
   chalk@5.3.0:
     resolution: {integrity: sha512-dLitG79d+GV1Nb/VYcCDFivJeK1hiukt9QjRNVOsUtTy1rR1YJsmpGGTZ3qJos+uw7WmWF4wUwBd9jxjocFC2w==}
     engines: {node: ^12.17.0 || ^14.13 || >=16.0.0}
+
+  client-zip@2.5.1:
+    resolution: {integrity: sha512-yOvNSBsQX1B7wtdvIVXJEIIShrlPiX+adhli7sWvQhsx3nX1DjvpSt+AwOxaX+3DCsT/Yx0nRy5hIjRLIYfebw==}
 
   cloudflare@5.2.0:
     resolution: {integrity: sha512-dVzqDpPFYR9ApEC9e+JJshFJZXcw4HzM8W+3DHzO5oy9+8rLC53G7x6fEf9A7/gSuSCxuvndzui5qJKftfIM9A==}
@@ -1851,6 +1858,8 @@ snapshots:
       function-bind: 1.1.2
 
   chalk@5.3.0: {}
+
+  client-zip@2.5.1: {}
 
   cloudflare@5.2.0:
     dependencies:

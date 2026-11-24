@@ -1,5 +1,6 @@
 <script>
   import { goto, invalidateAll } from '$app/navigation';
+  import { SvelteSet } from 'svelte/reactivity';
   import Button from '#lib/components/ui/button/button.svelte';
   import ResourceList from '#lib/components/ResourceList.svelte';
   import Draft from './Draft.svelte';
@@ -10,9 +11,57 @@
   let notice = $state('');
   let draftNotice = $state('');
 
+  let uploading = $state(false);
+  let publishing = $state(false);
+  const selected = new SvelteSet();
+  let errors = $state([]);
+  let publishable = $derived(data.drafts.filter(draft =>
+    selected.has(draft.id) && (draft.uploaded_bytes == null || draft.uploaded_bytes === draft.size_bytes)));
+
+  function select(id, checked) {
+    if (checked) selected.add(id);
+    else selected.delete(id);
+  }
+
+  async function uploaded(ids) {
+    for (const id of ids) selected.add(id);
+    errors = errors.filter(error => !ids.includes(error.id));
+    await refreshDrafts(ids.length ? 'Uploaded files are selected below. Confirm publication when ready.' : '');
+  }
+
+  async function publish() {
+    const drafts = publishable;
+    if (publishing || !drafts.length) return;
+    publishing = true;
+    errors = [];
+    let count = 0;
+    try {
+      for (const draft of drafts) {
+        try {
+          const response = await fetch(`/api/manage/resources/${draft.id}/publication`, { method: 'PUT' });
+          if (response.status !== 204) {
+            if ([404, 409, 410, 422].includes(response.status)) throw new Error(await response.text());
+            throw new Error('Check your sign-in and retry.');
+          }
+          selected.delete(draft.id);
+          count++;
+        } catch (error) {
+          errors.push({ id: draft.id, path: draft.path, message: error.message });
+        }
+      }
+      await refreshDrafts(`Published ${count} of ${drafts.length} selected files.`);
+    } catch {
+      draftNotice = `Published ${count} of ${drafts.length} selected files. Reload to refresh the list.`;
+    } finally {
+      publishing = false;
+    }
+  }
+
   async function refreshDrafts(message) {
     draftNotice = message;
     await invalidateAll();
+    const drafts = new Set(data.drafts.map(draft => draft.id));
+    for (const id of selected) if (!drafts.has(id)) selected.delete(id);
   }
 
   async function deleteFile({ id, path }) {
@@ -47,17 +96,28 @@
 <h1>Manage files</h1>
 <p class="mt-4 muted">Signed in as <strong>{data.email}</strong></p>
 
-<details class="mt-8" open={data.resources.length === 0 && data.page === 1}>
-  <summary class="w-fit cursor-pointer font-semibold text-primary">Upload a file</summary>
-  <UploadForm partSize={data.part_size} maxSize={data.max_upload_size} onrefresh={refreshDrafts} />
+<details class="mt-8" open>
+  <summary class="w-fit cursor-pointer font-semibold text-primary">Upload files</summary>
+  <fieldset disabled={publishing}>
+    <UploadForm partSize={data.part_size} maxSize={data.max_upload_size} bind:busy={uploading} onrefresh={uploaded} />
+  </fieldset>
 </details>
 
 <p role="status" class="mt-2 wrap-anywhere text-sm muted">{draftNotice}</p>
+{#if errors.length}
+  <ul class="mt-2 text-sm wrap-anywhere" aria-label="Publication errors">
+    {#each errors as error (error.id)}<li>{error.path} · {error.message}</li>{/each}
+  </ul>
+{/if}
 {#if data.drafts.length}
   <h2 class="mt-10 text-2xl font-semibold">Unpublished drafts</h2>
+  <Button class="mt-4" disabled={uploading || publishing || !publishable.length} onclick={publish}>
+    {publishing ? 'Publishing…' : `Confirm publication (${publishable.length})`}
+  </Button>
   <ul>
     {#each data.drafts as draft (draft.id)}
-      <Draft {draft} onrefresh={refreshDrafts} />
+      <Draft {draft} checked={selected.has(draft.id)} disabled={publishing} bind:uploading
+        onselect={checked => select(draft.id, checked)} onuploaded={uploaded} onrefresh={refreshDrafts} />
     {/each}
   </ul>
 {/if}

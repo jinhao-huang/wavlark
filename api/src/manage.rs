@@ -64,7 +64,7 @@ async fn list(req: Request, ctx: RouteContext<()>, email: String) -> Result<Resp
         .all()
         .await?
         .results::<Value>()?;
-    catalog::list(req, ctx, true, json!({ "email": email, "drafts": drafts, "part_size": uploads::PART_SIZE, "max_upload_size": uploads::MAX_SIZE })).await
+    catalog::list(req, ctx, json!({ "email": email, "drafts": drafts, "part_size": uploads::PART_SIZE, "max_upload_size": uploads::MAX_SIZE })).await
 }
 
 async fn remove(ctx: RouteContext<()>, draft: bool) -> Result<Response> {

@@ -34,10 +34,16 @@ to verify the management page and API with temporary signed credentials.
 
 ## Manage files
 
-Under **Manage files → Upload a file**, choose a file of up to 100 MiB. Leave **Directory**
-empty for the root, or enter a path such as `Maps/Europe`. You can add a
-description. Select **Upload file**, then **Confirm publication** to make the
-file public. Share its details page, for example `/resources/Maps/Europe/atlas.pdf`.
+On **Public files**, select files across catalog pages. **Download file** saves one
+original. **Download ZIP** saves up to 40 files totaling up to 200 MiB, with their catalog paths.
+Keep the catalog open while your browser prepares the ZIP. If interrupted, download it again.
+
+Under **Manage files → Upload files**, choose one or more files of up to 100 MiB
+each. The directory and optional description apply to all of them. Leave the
+directory empty for the root, or enter a path such as `Maps/Europe`. Select
+**Upload files**. Two files can upload at once. Retry failed files individually.
+Under **Unpublished drafts**, select the files to publish and click **Confirm
+publication**. Each has its own share link, such as `/resources/Maps/Europe/atlas.pdf`.
 
 Uploads reserve their path. Any administrator can reopen **Manage files →
 Unpublished drafts** and confirm a completed upload.
@@ -45,7 +51,7 @@ Files up to 5 MiB upload in one request. Larger files upload in 5 MiB parts.
 After an interruption, retry on the same page or
 select **Resume upload** on the draft and choose the original file. The upload
 continues from the last confirmed part. For a single-request upload, **Re-upload
-file** retries the whole file. Once uploaded, select **Confirm publication**.
+file** retries the whole file.
 To replace a file, confirm **Discard draft** and upload the replacement at the freed path.
 Drafts expire 24 hours after creation. Scheduled cleanup removes their files and releases their paths.
 

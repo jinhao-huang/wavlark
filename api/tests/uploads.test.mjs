@@ -138,8 +138,8 @@ test('upload, publish, delete and reuse file paths', async (t) => {
   });
   const adminList = await (await app.fetch('/api/manage/resources', { headers })).json();
   assert.equal(adminList.email, otherAdminEmail);
-  assert.deepEqual(adminList.resources, [{ ...catalog.resources[0], id: upload.id }]);
-  assert.ok(!('id' in catalog.resources[0]));
+  assert.deepEqual(adminList.resources, catalog.resources);
+  assert.equal(catalog.resources[0].id, upload.id);
   assert.ok(!('email' in catalog));
   assert.ok(!('drafts' in catalog));
   const adminPage = await app.fetch('/manage', { headers });
@@ -191,6 +191,24 @@ test('upload, publish, delete and reuse file paths', async (t) => {
   assert.equal((await remove(next.id)).status, 204);
   const latest = await app.fetch('/download/' + encoded, { redirect: 'manual' });
   assert.equal(await (await fetch(latest.headers.get('Location'))).text(), 'final');
+
+  await t.test('download a selected version only while it is public', async () => {
+    const download = id => app.fetch('/api/downloads/' + id);
+    assert.equal((await download(next.id)).status, 404);
+    const draft = await (await create({ directory: '苏州' })).json();
+    assert.equal((await put(draft, 'other')).status, 200);
+    assert.equal((await download(draft.id)).status, 404);
+    assert.equal((await publish(draft.id)).status, 204);
+    const check = await app.fetch(`/api/downloads?file=${draft.id}&file=${next.id}`);
+    assert.deepEqual(await check.json(), [{ id: next.id }]);
+    const file = await download(draft.id);
+    assert.equal(file.status, 200);
+    assert.match(file.headers.get('Content-Disposition'), /^attachment;/);
+    assert.equal(file.headers.get('Cache-Control'), 'no-store');
+    assert.equal(await file.text(), 'other');
+    assert.equal((await remove(draft.id)).status, 204);
+    assert.equal((await download(draft.id)).status, 404);
+  });
 
   // Reopen a draft from another administrator's session after leaving the form.
   const draftFields = { directory: 'recovery' };
