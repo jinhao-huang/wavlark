@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Wavlark 是一个公共文件分享站。所有管理员都可以上传、发布和删除文件。`web/` 下的 SvelteKit Worker（`wavlark-web`）负责展示资源目录，通过 `API` 服务绑定调用 `api/` 下的 Rust Worker（`wavlark-api`），处理发布请求、查询文件信息并生成上传和下载链接。
+Wavlark 是一个公共文件分享站。所有管理员都可以上传、发布和删除文件。`web/` 下的 SvelteKit Worker（`wavlark-web`）负责展示资源目录，通过 `API` 服务绑定调用 `api/` 下的 Rust Worker（`wavlark-api`），处理发布请求、查询文件信息、签发上传链接并发送下载文件。
 
 ## 本地运行
 
@@ -30,7 +30,9 @@ mise run dev
 
 开始上传后，草稿会占用所选路径。任何管理员都可以回到 **Manage files → Unpublished drafts**，确认发布已上传的文件。5 MiB 及以下的文件一次传完，更大的文件按 5 MiB 分片上传。中断后可以在原页面重试，也可以在草稿中点击 **Resume upload**，重新选择原文件，从上次确认的分片继续。整文件上传的草稿可用 **Re-upload file** 从头重试。要替换它，点击 **Discard draft** 并确认，即可在原路径上传新文件。草稿在创建 24 小时后过期，定时任务随后删除文件并释放路径。
 
-在 **Published files** 中点击 **Delete** 并确认，原分享链接随即失效。在同一路径发布新文件后，原链接会打开新文件。Wavlark 按 UUID 删除旧的 R2 文件。如果 R2 暂时不可用，每日清理任务会补删。此前签发的 R2 下载链接最迟在签发后五分钟失效。
+在 **Manage files → Download speeds** 中设置每条下载的速度上限。公开下载默认每条 2 MB/s，管理页 **Published files** 中的 **Download** 按钮使用管理员速度，默认不限速。将输入框留空即可取消限速。保存后，新下载和续传请求使用新设置。同时下载多份文件时，每份单独限速。支持断点续传的下载工具可以用原站点地址和文件的 ETag 继续下载。
+
+在 **Published files** 中点击 **Delete** 并确认，原分享链接随即失效。在同一路径发布新文件后，原链接会打开新文件。Wavlark 按 UUID 删除旧的 R2 文件。如果 R2 暂时不可用，每日清理任务会补删。
 
 ## 部署到生产环境
 

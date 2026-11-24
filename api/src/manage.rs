@@ -1,4 +1,5 @@
 use crate::{catalog, uploads};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use worker::wasm_bindgen::prelude::*;
 use worker::*;
@@ -33,6 +34,15 @@ pub async fn handle(req: Request, env: Env) -> Result<Response> {
         return unauthorized();
     };
     Router::new()
+        .put_async("/api/manage/download-settings", save_download_settings)
+        .get_async(
+            "/api/manage/resources/:id/download",
+            catalog::admin_download,
+        )
+        .head_async(
+            "/api/manage/resources/:id/download",
+            catalog::admin_download,
+        )
         .get_async("/api/manage/resources", |req, ctx| {
             list(req, ctx, email.clone())
         })
@@ -64,7 +74,36 @@ async fn list(req: Request, ctx: RouteContext<()>, email: String) -> Result<Resp
         .all()
         .await?
         .results::<Value>()?;
-    catalog::list(req, ctx, json!({ "email": email, "drafts": drafts, "part_size": uploads::PART_SIZE, "max_upload_size": uploads::MAX_SIZE })).await
+    let settings = ctx
+        .d1("DB")?
+        .prepare("SELECT public_mbps, admin_mbps FROM download_settings WHERE id = 1")
+        .first::<Value>(None)
+        .await?;
+    catalog::list(req, ctx, json!({ "download_settings": settings, "email": email, "drafts": drafts, "part_size": uploads::PART_SIZE, "max_upload_size": uploads::MAX_SIZE })).await
+}
+
+#[derive(Deserialize)]
+struct DownloadSettings {
+    public_mbps: f64,
+    admin_mbps: f64,
+}
+
+async fn save_download_settings(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let Ok(settings) = req.json::<DownloadSettings>().await else {
+        return Response::error("Provide both download speeds in MB/s.", 400);
+    };
+    if [settings.public_mbps, settings.admin_mbps]
+        .iter()
+        .any(|&rate| rate != 0.0 && rate < 0.000001)
+    {
+        return Response::error("Use 0 for unlimited or at least 0.000001 MB/s.", 400);
+    }
+    ctx.d1("DB")?
+        .prepare("UPDATE download_settings SET public_mbps = ?, admin_mbps = ? WHERE id = 1")
+        .bind(&[settings.public_mbps.into(), settings.admin_mbps.into()])?
+        .run()
+        .await?;
+    Ok(Response::empty()?.with_status(204))
 }
 
 async fn remove(ctx: RouteContext<()>, draft: bool) -> Result<Response> {

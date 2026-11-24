@@ -26,7 +26,7 @@ test('admin access through the web and API Workers', async (t) => {
   const api = await app.fetch('/api/manage/resources', { headers });
   assert.equal(api.status, 200);
   assert.equal(api.headers.get('Cache-Control'), 'no-store');
-  assert.deepEqual(await api.json(), { email, drafts: [], part_size: 5 * 1024 ** 2, max_upload_size: 100 * 1024 ** 2, resources: [], page: 1, has_next: false });
+  assert.deepEqual(await api.json(), { email, download_settings: { public_mbps: 2, admin_mbps: 0 }, drafts: [], part_size: 5 * 1024 ** 2, max_upload_size: 100 * 1024 ** 2, resources: [], page: 1, has_next: false });
   const page = await app.fetch('/manage', { headers });
   assert.equal(page.status, 200);
   assert.equal(page.headers.get('Cache-Control'), 'no-store');

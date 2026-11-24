@@ -14,3 +14,6 @@
   <p class="mt-6 max-w-prose whitespace-pre-line wrap-anywhere">{file.description}</p>
 {/if}
 <Button class="mt-8" href={'/download/' + encodePath(file.path)} data-sveltekit-reload>Download file</Button>
+{#if file.public_mbps}
+  <p class="mt-2 text-sm muted">Up to {file.public_mbps} MB/s per download.</p>
+{/if}

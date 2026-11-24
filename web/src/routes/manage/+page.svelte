@@ -3,6 +3,7 @@
   import { SvelteSet } from 'svelte/reactivity';
   import Button from '#lib/components/ui/button/button.svelte';
   import ResourceList from '#lib/components/ResourceList.svelte';
+  import DownloadSettings from './DownloadSettings.svelte';
   import Draft from './Draft.svelte';
   import UploadForm from './UploadForm.svelte';
 
@@ -100,6 +101,8 @@
 <h1>Manage files</h1>
 <p class="mt-4 muted">Signed in as <strong>{data.email}</strong></p>
 
+<DownloadSettings settings={data.download_settings} />
+
 <details class="mt-8" open>
   <summary class="w-fit cursor-pointer font-semibold text-primary">Upload files</summary>
   <fieldset disabled={publishing}>
@@ -130,6 +133,8 @@
 <p role="status" class="mt-2 wrap-anywhere text-sm muted">{notice}</p>
 <ResourceList {data} base="/manage">
   {#snippet action(file)}
+    <Button variant="outline" href={'/api/manage/resources/' + file.id + '/download'} data-sveltekit-reload
+      aria-label={`Download ${file.path}`}>Download</Button>
     <Button variant="outline" aria-label={`Delete ${file.path}`} disabled={deletingId !== null} onclick={() => deleteFile(file)}>
       {deletingId === file.id ? 'Deleting…' : 'Delete'}
     </Button>

@@ -5,7 +5,7 @@
 Wavlark is a public file library. Any administrator can upload, publish, and delete files.
 The SvelteKit Worker
 in `web/` (`wavlark-web`) renders the catalog. Its `API` service binding calls the Rust Worker in
-`api/` (`wavlark-api`) for publication, catalog queries, and signed file transfers.
+`api/` (`wavlark-api`) for publication, catalog queries, and file transfers.
 
 ## Run locally
 
@@ -17,7 +17,7 @@ mise run setup
 mise run dev
 ```
 
-Open the URL printed by Vite. The catalog and signed downloads share this
+Open the URL printed by Vite. The catalog and downloads share this
 address. Vite starts on port 5173 and tries the next available port if it's
 busy. To choose a different starting port, run `mise run dev --port 5200`.
 
@@ -55,11 +55,16 @@ file** retries the whole file.
 To replace a file, confirm **Discard draft** and upload the replacement at the freed path.
 Drafts expire 24 hours after creation. Scheduled cleanup removes their files and releases their paths.
 
+Under **Manage files → Download speeds**, set the maximum MB/s per download. Public downloads
+default to 2 MB/s. The **Download** button under **Published files** uses the administrator
+speed, which defaults to unlimited. Leave a field empty for unlimited speed. Changes apply
+to new requests, including resumed downloads. Parallel downloads each get their own limit.
+Download clients can resume at the site URL using byte ranges and the file's ETag.
+
 Under **Published files**, select **Delete** and confirm. The share link stops
 working immediately. Publishing a new file at the same path makes that link open
 the new file. Wavlark deletes the old R2 object by UUID. If R2 is unavailable,
-daily cleanup retries the deletion. Previously issued R2 download links expire
-within five minutes.
+daily cleanup retries the deletion.
 
 ## Deploy to production
 

@@ -104,10 +104,9 @@ test('upload, publish, delete and reuse file paths', async (t) => {
   assert.equal(page.status, 200);
   assert.ok((await page.text()).includes(path));
   const download = await app.fetch('/download/' + encoded, { redirect: 'manual' });
-  assert.equal(download.status, 302);
-  const object = await fetch(download.headers.get('Location'));
-  assert.equal(decodeURIComponent(object.headers.get('Content-Disposition')), `attachment; filename*=UTF-8''${name}`);
-  assert.equal(await object.text(), 'hello');
+  assert.equal(download.status, 200);
+  assert.equal(decodeURIComponent(download.headers.get('Content-Disposition')), `attachment; filename*=UTF-8''${name}`);
+  assert.equal(await download.text(), 'hello');
 
   const abandoned = await (await create({ directory: 'never-uploaded' })).json();
   await DB.prepare('UPDATE resources SET expires_at = 1 WHERE id IN (?, ?)').bind(missing.id, abandoned.id).run();
@@ -149,7 +148,6 @@ test('upload, publish, delete and reuse file paths', async (t) => {
   assert.ok(await FILES.head(root.id)); // A draft has no published file to delete.
   assert.equal((await remove(upload.id, otherAdmin)).status, 204);
   assert.equal(await FILES.head(upload.id), null);
-  assert.equal((await fetch(download.headers.get('Location'))).status, 404);
   for (const prefix of ['/resources/', '/api/resources/', '/download/']) {
     assert.equal((await app.fetch(prefix + encoded)).status, 404);
   }
@@ -161,7 +159,7 @@ test('upload, publish, delete and reuse file paths', async (t) => {
   assert.equal((await publish(next.id)).status, 204);
   assert.equal((await remove(upload.id)).status, 204);
   const reusedLink = await app.fetch('/download/' + encoded, { redirect: 'manual' });
-  assert.equal(await (await fetch(reusedLink.headers.get('Location'))).text(), 'again');
+  assert.equal(await reusedLink.text(), 'again');
 
   for (const name of ['__data.json', 'index.html__route.js']) {
     const special = await (await create({ name, directory: '', size_bytes: 2 })).json();
@@ -173,9 +171,9 @@ test('upload, publish, delete and reuse file paths', async (t) => {
     const detail = await app.fetch(detailPath, { redirect: 'manual' });
     assert.equal(detail.status, 200);
     assert.ok((await detail.text()).includes(`href="/download/${name}/"`));
-    const redirect = await app.fetch('/download/' + name + '/', { redirect: 'manual' });
-    assert.equal(redirect.status, 302);
-    assert.equal(await (await fetch(redirect.headers.get('Location'))).text(), 'ok');
+    const response = await app.fetch('/download/' + name + '/', { redirect: 'manual' });
+    assert.equal(response.status, 200);
+    assert.equal(await response.text(), 'ok');
   }
   const failedDelete = await app.fetch('/api/manage/resources/' + next.id, {
     method: 'DELETE', headers: { ...headers, Origin: url.origin, 'X-Test-Fail-R2-Delete': '1' }
@@ -190,7 +188,7 @@ test('upload, publish, delete and reuse file paths', async (t) => {
   assert.equal(await FILES.head(next.id), null);
   assert.equal((await remove(next.id)).status, 204);
   const latest = await app.fetch('/download/' + encoded, { redirect: 'manual' });
-  assert.equal(await (await fetch(latest.headers.get('Location'))).text(), 'final');
+  assert.equal(await latest.text(), 'final');
 
   await t.test('download a selected version only while it is public', async () => {
     const download = id => app.fetch('/api/downloads/' + id, { redirect: 'manual' });
@@ -204,10 +202,8 @@ test('upload, publish, delete and reuse file paths', async (t) => {
       body: JSON.stringify([draft.id, next.id])
     });
     assert.deepEqual(await check.json(), [{ id: next.id }]);
-    const redirect = await download(draft.id);
-    assert.equal(redirect.status, 302);
-    assert.equal(redirect.headers.get('Cache-Control'), 'no-store');
-    const file = await fetch(redirect.headers.get('Location'));
+    const file = await download(draft.id);
+    assert.equal(file.headers.get('Cache-Control'), 'no-store');
     assert.equal(file.status, 200);
     assert.match(file.headers.get('Content-Disposition'), /^attachment;/);
     assert.equal(await file.text(), 'other');
@@ -251,7 +247,7 @@ test('upload, publish, delete and reuse file paths', async (t) => {
   if (publication.status === 204) {
     assert.equal(removal.status, 404);
     assert.equal(await (await FILES.get(race.id)).text(), 'hello');
-    assert.equal((await app.fetch('/download/two-admins/' + encodeURIComponent(name), { redirect: 'manual' })).status, 302);
+    assert.equal((await app.fetch('/download/two-admins/' + encodeURIComponent(name), { redirect: 'manual' })).status, 200);
   } else {
     assert.ok([404, 409, 410].includes(publication.status));
     assert.equal(removal.status, 204);

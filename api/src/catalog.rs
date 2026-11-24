@@ -1,7 +1,5 @@
-use std::time::Duration;
-
-use rusty_s3::S3Action;
 use serde_json::Value;
+use worker::wasm_bindgen::prelude::*;
 use worker::*;
 
 const PAGE_SIZE: u32 = 20;
@@ -44,7 +42,7 @@ pub async fn detail(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let path = public_path(&ctx);
     let resource = ctx
         .d1("DB")?
-        .prepare("SELECT path, description, size_bytes, published_at FROM published_resources WHERE path = ?")
+        .prepare("SELECT path, description, size_bytes, published_at, public_mbps FROM published_resources CROSS JOIN download_settings WHERE path = ? AND download_settings.id = 1")
         .bind(&[path.as_ref().into()])?
         .first::<Value>(None)
         .await?;
@@ -54,31 +52,35 @@ pub async fn detail(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
     }
 }
 
-pub async fn download(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-    let (column, value) = match ctx.param("id") {
-        Some(id) => ("id", std::borrow::Cow::Borrowed(id.as_str())),
-        None => ("path", public_path(&ctx)),
-    };
-    let published_id = ctx
-        .d1("DB")?
-        .prepare(format!(
-            "SELECT id FROM published_resources WHERE {column} = ?"
-        ))
-        .bind(&[value.as_ref().into()])?
-        .first::<String>(Some("id"))
-        .await?;
-    let Some(key) = published_id else {
-        return Response::error("File not found.", 404);
-    };
+#[wasm_bindgen(module = "/src/download.js")]
+extern "C" {
+    #[wasm_bindgen(catch, js_name = sendDownload)]
+    async fn send_download(
+        request: &web_sys::Request,
+        env: &Env,
+        identifier: &str,
+        by_id: bool,
+        admin: bool,
+    ) -> std::result::Result<web_sys::Response, JsValue>;
+}
 
-    let (bucket, credentials) = crate::storage::signer(&req, &ctx.env)?;
-    let url = bucket
-        .get_object(Some(&credentials), &key)
-        .sign(Duration::from_secs(300));
-    let mut response = Response::empty()?.with_status(302);
-    response.headers_mut().set("Location", url.as_str())?;
-    response.headers_mut().set("Cache-Control", "no-store")?;
-    Ok(response)
+pub async fn download(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let id = ctx.param("id");
+    let identifier = id
+        .map(|id| id.as_str().into())
+        .unwrap_or_else(|| public_path(&ctx));
+    Ok(
+        send_download(req.inner(), &ctx.env, &identifier, id.is_some(), false)
+            .await?
+            .into(),
+    )
+}
+
+pub async fn admin_download(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let id = ctx.param("id").expect("admin download route has an id");
+    Ok(send_download(req.inner(), &ctx.env, id, true, true)
+        .await?
+        .into())
 }
 
 pub async fn missing_files(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
