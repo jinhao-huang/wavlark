@@ -35,23 +35,27 @@
     publishing = true;
     errors = [];
     let count = 0;
-    try {
-      for (const draft of drafts) {
-        try {
-          const response = await fetch(`/api/manage/resources/${draft.id}/publication`, { method: 'PUT' });
-          if (response.status !== 204) {
-            if ([404, 409, 410, 422].includes(response.status)) throw new Error(await response.text());
-            throw new Error('Check your sign-in and retry.');
-          }
+    for (const draft of drafts) {
+      let message;
+      try {
+        const response = await fetch(`/api/manage/resources/${draft.id}/publication`, { method: 'PUT' });
+        if (response.status === 204) {
           selected.delete(draft.id);
           count++;
-        } catch (error) {
-          errors.push({ id: draft.id, path: draft.path, message: error.message });
+          continue;
         }
+        message = [404, 409, 410, 422].includes(response.status)
+          ? await response.text() : 'Could not confirm publication. Check your sign-in and the published files list.';
+      } catch {
+        message = 'Could not confirm publication. Check the published files list before retrying.';
       }
-      await refreshDrafts(`Published ${count} of ${drafts.length} selected files.`);
+      errors.push({ id: draft.id, path: draft.path, message });
+    }
+    const summary = `Confirmed publication for ${count} of ${drafts.length} selected files.`;
+    try {
+      await refreshDrafts(summary);
     } catch {
-      draftNotice = `Published ${count} of ${drafts.length} selected files. Reload to refresh the list.`;
+      draftNotice = summary + ' Reload to refresh the list.';
     } finally {
       publishing = false;
     }
