@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Wavlark 是一个公共文件分享站。所有管理员都可以上传和发布文件。`web/` 下的 SvelteKit Worker（`wavlark`）负责展示资源目录，通过 `API` 服务绑定调用 `worker/` 下的 Rust Worker（`wavlark-api`），处理发布请求、查询文件信息并生成上传和下载链接。
+Wavlark 是一个公共文件分享站。所有管理员都可以上传、发布和删除文件。`web/` 下的 SvelteKit Worker（`wavlark`）负责展示资源目录，通过 `API` 服务绑定调用 `worker/` 下的 Rust Worker（`wavlark-api`），处理发布请求、查询文件信息并生成上传和下载链接。
 
 ## 本地运行
 
@@ -22,11 +22,13 @@ mise run dev
 
 运行 `mise run build` 可在本机构建两个 Worker 并模拟部署。
 
-## 发布文件
+## 管理文件
 
 打开 **Manage files**，选择一个不超过 100 MiB 的文件。**Directory** 留空表示根目录，也可以填写 `地图/杭州` 这样的多级目录。按需填写说明，点击 **Upload file**，再点击 **Confirm publication** 公开文件。访客可以通过详情页链接访问资源，例如 `/resources/地图/杭州/交通图.pdf`。
 
 开始上传后，草稿会占用所选路径。在同一表单中重试，会为原草稿签发新的上传链接。未发布的草稿在 24 小时后过期，定时任务随后删除文件并释放路径。
+
+在 **Published files** 中点击 **Delete** 并确认，原分享链接随即失效。在同一路径发布新文件后，原链接会打开新文件。Wavlark 按 UUID 删除旧的 R2 文件。如果 R2 暂时不可用，每日清理任务会补删。此前签发的 R2 下载链接最迟在签发后五分钟失效。
 
 ## 生产环境存储配置
 

@@ -1,3 +1,4 @@
+use crate::catalog;
 use serde_json::json;
 use worker::wasm_bindgen::prelude::*;
 use worker::*;
@@ -32,9 +33,10 @@ pub async fn handle(req: Request, env: Env) -> Result<Response> {
         return unauthorized();
     };
     Router::new()
-        .get_async("/api/manage/me", |_, _| async {
-            Response::from_json(&json!({ "email": email }))
+        .get_async("/api/manage/resources", |req, ctx| {
+            catalog::list(req, ctx, true, json!({ "email": email }))
         })
+        .delete_async("/api/manage/resources/:id", delete_file)
         .post_async("/api/manage/resources", crate::uploads::create)
         .post_async("/api/manage/resources/:id/upload", crate::uploads::renew)
         .put_async(
@@ -43,4 +45,20 @@ pub async fn handle(req: Request, env: Env) -> Result<Response> {
         )
         .run(req, env)
         .await
+}
+
+async fn delete_file(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let id = ctx.param("id").expect("resource route has an id");
+    let deleted_id = ctx
+        .d1("DB")?
+        .prepare("DELETE FROM resources WHERE id = ? AND published_at IS NOT NULL RETURNING id")
+        .bind(&[id.as_str().into()])?
+        .first::<String>(Some("id"))
+        .await?;
+    if let Some(id) = deleted_id
+        && let Err(error) = ctx.bucket("FILES")?.delete(&id).await
+    {
+        console_error!("R2 deletion for {id} deferred to orphan cleanup: {error}");
+    }
+    Ok(Response::empty()?.with_status(204))
 }

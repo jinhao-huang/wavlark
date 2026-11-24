@@ -1,14 +1,19 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { createTestHarness } from 'wrangler';
+import { createTestHarness, experimental_readRawConfig } from 'wrangler';
 import { startLocalAccess } from '../../dev/local-access.mjs';
 
-test('reserve, renew, publish and reclaim file paths', async (t) => {
+test('upload, publish, delete and reuse file paths', async (t) => {
   const access = await startLocalAccess();
   t.after(() => access.server[Symbol.asyncDispose]());
+  const { rawConfig } = experimental_readRawConfig({ config: 'wrangler.jsonc' });
   const app = createTestHarness({ workers: [
     { configPath: '../web/.svelte-kit/cloudflare/worker/wrangler.json' },
-    { configPath: 'wrangler.jsonc', vars: { ACCESS_ISSUER: access.issuer, ACCESS_AUD: access.audience } }
+    { config: {
+      ...rawConfig,
+      main: 'tests/r2-delete-failure.mjs',
+      vars: { ACCESS_ISSUER: access.issuer, ACCESS_AUD: access.audience }
+    } }
   ] });
   t.after(() => app.close());
   const { url } = await app.listen();
@@ -122,6 +127,36 @@ test('reserve, renew, publish and reclaim file paths', async (t) => {
   assert.ok(await FILES.head(root.id));
   assert.ok(await FILES.head('unmanaged'));
 
+  const headers = { 'Cf-Access-Jwt-Assertion': otherAdmin };
+  const remove = (id, jwt = token) => app.fetch('/api/manage/resources/' + id, {
+    method: 'DELETE', headers: { Origin: url.origin, 'Cf-Access-Jwt-Assertion': jwt }
+  });
+  const adminList = await (await app.fetch('/api/manage/resources', { headers })).json();
+  assert.equal(adminList.email, otherAdminEmail);
+  assert.deepEqual(adminList.resources, [{ ...catalog.resources[0], id: upload.id }]);
+  assert.ok(!('id' in catalog.resources[0]));
+  assert.ok(!('email' in catalog));
+  const adminPage = await app.fetch('/manage', { headers });
+  assert.ok((await adminPage.text()).includes(`aria-label="Delete ${path}"`));
+  assert.equal((await remove(upload.id, '')).status, 401);
+  assert.equal((await remove(root.id)).status, 204);
+  assert.ok(await FILES.head(root.id)); // A draft has no published file to delete.
+  assert.equal((await remove(upload.id, otherAdmin)).status, 204);
+  assert.equal(await FILES.head(upload.id), null);
+  assert.equal((await fetch(download.headers.get('Location'))).status, 404);
+  for (const prefix of ['/resources/', '/api/resources/', '/download/']) {
+    assert.equal((await app.fetch(prefix + encoded)).status, 404);
+  }
+  assert.deepEqual((await (await app.fetch('/api/manage/resources', { headers })).json()).resources, []);
+
+  const next = await (await create({}, otherAdmin)).json();
+  assert.notEqual(next.id, upload.id);
+  assert.equal((await put(next, 'again')).status, 200);
+  assert.equal((await publish(next.id)).status, 204);
+  assert.equal((await remove(upload.id)).status, 204);
+  const reusedLink = await app.fetch('/download/' + encoded, { redirect: 'manual' });
+  assert.equal(await (await fetch(reusedLink.headers.get('Location'))).text(), 'again');
+
   for (const name of ['__data.json', 'index.html__route.js']) {
     const special = await (await create({ name, directory: '', size_bytes: 2 })).json();
     assert.equal((await put(special, 'ok')).status, 200);
@@ -136,4 +171,18 @@ test('reserve, renew, publish and reclaim file paths', async (t) => {
     assert.equal(redirect.status, 302);
     assert.equal(await (await fetch(redirect.headers.get('Location'))).text(), 'ok');
   }
+  const failedDelete = await app.fetch('/api/manage/resources/' + next.id, {
+    method: 'DELETE', headers: { ...headers, Origin: url.origin, 'X-Test-Fail-R2-Delete': '1' }
+  });
+  assert.equal(failedDelete.status, 204);
+  assert.equal(await DB.prepare('SELECT id FROM resources WHERE id = ?').bind(next.id).first(), null);
+  assert.ok(await FILES.head(next.id));
+  const finalFile = await (await create()).json();
+  assert.equal((await put(finalFile, 'final')).status, 200);
+  assert.equal((await publish(finalFile.id)).status, 204);
+  await api.scheduled({ cron: '0 3 * * *' });
+  assert.equal(await FILES.head(next.id), null);
+  assert.equal((await remove(next.id)).status, 204);
+  const latest = await app.fetch('/download/' + encoded, { redirect: 'manual' });
+  assert.equal(await (await fetch(latest.headers.get('Location'))).text(), 'final');
 });

@@ -15,6 +15,7 @@ test('admin access through the web and API Workers', async (t) => {
   ] });
   t.after(() => app.close());
   await app.listen();
+  await app.getWorker('wavlark-api').applyD1Migrations('DB');
   const email = 'admin@example.com';
   const headers = { 'Cf-Access-Jwt-Assertion': await sign() };
   const address = server.address();
@@ -22,16 +23,16 @@ test('admin access through the web and API Workers', async (t) => {
   assert.equal((await app.fetch('/manage', { headers })).status, 503);
   server.listen(address.port, address.address);
   await once(server, 'listening');
-  const api = await app.fetch('/api/manage/me', { headers });
+  const api = await app.fetch('/api/manage/resources', { headers });
   assert.equal(api.status, 200);
   assert.equal(api.headers.get('Cache-Control'), 'no-store');
-  assert.deepEqual(await api.json(), { email });
+  assert.deepEqual(await api.json(), { email, resources: [], page: 1, has_next: false });
   const page = await app.fetch('/manage', { headers });
   assert.equal(page.status, 200);
   assert.equal(page.headers.get('Cache-Control'), 'no-store');
   assert.ok((await page.text()).includes(email));
 
-  for (const path of ['/manage', '/api/manage/me']) {
+  for (const path of ['/manage', '/api/manage/resources']) {
     const anonymous = await app.fetch(path, { headers: { 'Cf-Access-Authenticated-User-Email': email } });
     assert.equal(anonymous.status, 401, path);
     assert.ok(!(await anonymous.text()).includes(email));
@@ -40,7 +41,7 @@ test('admin access through the web and API Workers', async (t) => {
     { iss: 'https://another.example' }, { aud: ['another-app'] }, { exp: 1 },
     { exp: undefined }, { nbf: Math.ceil(Date.now() / 1000) + 300 }, { type: 'org' }, { sub: '' }, { email: undefined }, { email: '' }
   ]) {
-    const response = await app.fetch('/api/manage/me', {
+    const response = await app.fetch('/api/manage/resources', {
       headers: { 'Cf-Access-Jwt-Assertion': await sign(overrides) }
     });
     assert.equal(response.status, 401, JSON.stringify(overrides));

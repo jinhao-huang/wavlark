@@ -213,7 +213,7 @@ pub async fn clean_expired(env: Env) -> Result<()> {
     Ok(())
 }
 
-// A PUT started before expiry can finish after its draft was removed.
+// Reclaim late uploads and files left behind when an R2 deletion fails.
 pub async fn clean_orphans(env: Env) -> Result<()> {
     let bucket = env.bucket("FILES")?;
     let db = env.d1("DB")?;

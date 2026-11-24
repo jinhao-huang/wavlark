@@ -6,9 +6,10 @@ export function encodePath(path) {
   return /(^|\/|\.html)__(data\.json|route\.js)$/.test(encoded) ? encoded + '/' : encoded;
 }
 
-export async function readCatalog(fetch, path) {
-  const response = await fetch(path);
+export async function readCatalog(fetch, path, options) {
+  const response = await fetch(path, options);
   if (!response.ok) {
+    if (response.status === 401) error(401, await response.text());
     if (response.status === 404) error(404, 'File not found.');
     if (response.status === 400) error(400, 'Invalid page number.');
     error(503, 'The file library is unavailable. Please try again.');

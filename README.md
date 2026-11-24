@@ -2,7 +2,7 @@
 
 [简体中文](README.zh-CN.md)
 
-Wavlark is a public file library. Any administrator can upload and publish files.
+Wavlark is a public file library. Any administrator can upload, publish, and delete files.
 The SvelteKit Worker
 in `web/` (`wavlark`) renders the catalog. Its `API` service binding calls the Rust Worker in
 `worker/` (`wavlark-api`) for publication, catalog queries, and signed file transfers.
@@ -31,7 +31,7 @@ local D1 migrations. Each checkout keeps its D1 and R2 data in
 
 Run `mise run build` to build and dry-run both Workers locally.
 
-## Publish a file
+## Manage files
 
 In **Manage files**, choose a file of up to 100 MiB. Leave **Directory**
 empty for the root, or enter a path such as `Maps/Europe`. You can add a
@@ -41,6 +41,12 @@ file public. Share its details page, for example `/resources/Maps/Europe/atlas.p
 Uploads reserve their path. A retry in the same form gets a fresh upload link
 for the original draft. Unpublished drafts expire after 24 hours. Scheduled
 cleanup deletes their files and releases their paths.
+
+Under **Published files**, select **Delete** and confirm. The share link stops
+working immediately. Publishing a new file at the same path makes that link open
+the new file. Wavlark deletes the old R2 object by UUID. If R2 is unavailable,
+daily cleanup retries the deletion. Previously issued R2 download links expire
+within five minutes.
 
 ## Production storage
 

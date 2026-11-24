@@ -1,14 +1,11 @@
-import { error } from '@sveltejs/kit';
+import { readCatalog } from '#lib/catalog.js';
 
-export async function load({ fetch, request, setHeaders }) {
+export function load({ fetch, request, setHeaders, url }) {
   setHeaders({ 'cache-control': 'no-store' });
   const token = request.headers.get('Cf-Access-Jwt-Assertion');
-  const response = await fetch('/api/manage/me', {
+  const page = url.searchParams.get('page') ?? '1';
+  return readCatalog(fetch, `/api/manage/resources?page=${encodeURIComponent(page)}`, {
     credentials: 'omit',
     headers: token ? { 'Cf-Access-Jwt-Assertion': token } : {}
   });
-  if (response.status === 401) error(401, await response.text());
-  if (!response.ok) error(503, 'Admin access is unavailable. Please try again.');
-  const { email } = await response.json();
-  return { email };
 }

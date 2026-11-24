@@ -1,12 +1,17 @@
 use std::time::Duration;
 
 use rusty_s3::S3Action;
-use serde_json::{Value, json};
+use serde_json::Value;
 use worker::*;
 
 const PAGE_SIZE: u32 = 20;
 
-pub async fn list(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn list(
+    req: Request,
+    ctx: RouteContext<()>,
+    include_ids: bool,
+    mut response: Value,
+) -> Result<Response> {
     let url = req.url()?;
     let page = url.query_pairs().find(|(key, _)| key == "page");
     let page = match page {
@@ -17,19 +22,23 @@ pub async fn list(req: Request, ctx: RouteContext<()>) -> Result<Response> {
         },
     };
     let offset = f64::from(page - 1) * f64::from(PAGE_SIZE);
+    let id_column = if include_ids { "id, " } else { "" };
     let mut resources = ctx
         .d1("DB")?
-        .prepare(
-            "SELECT path, size_bytes, published_at FROM published_resources
-                  ORDER BY published_at DESC, id DESC LIMIT ? OFFSET ?",
-        )
+        .prepare(format!(
+            "SELECT {id_column}path, size_bytes, published_at FROM published_resources
+             ORDER BY published_at DESC, id DESC LIMIT ? OFFSET ?"
+        ))
         .bind(&[(PAGE_SIZE + 1).into(), offset.into()])?
         .all()
         .await?
         .results::<Value>()?;
     let has_next = resources.len() > PAGE_SIZE as usize;
     resources.truncate(PAGE_SIZE as usize);
-    Response::from_json(&json!({ "resources": resources, "page": page, "has_next": has_next }))
+    response["resources"] = resources.into();
+    response["page"] = page.into();
+    response["has_next"] = has_next.into();
+    Response::from_json(&response)
 }
 
 fn public_path(ctx: &RouteContext<()>) -> std::borrow::Cow<'_, str> {
