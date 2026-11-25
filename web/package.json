@@ -6,7 +6,8 @@
     "#lib/*": "./src/lib/*"
   },
   "scripts": {
-    "build": "vite build"
+    "build": "vite build",
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
     "@sveltejs/adapter-cloudflare": "^9.0.0",

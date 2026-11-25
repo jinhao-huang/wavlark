@@ -16,6 +16,12 @@ importers:
         specifier: ^4.166.0
         version: 4.166.0(@types/node@24.19.2)
 
+  api:
+    devDependencies:
+      mise:
+        specifier: 2026.10.3
+        version: 2026.10.3
+
   web:
     dependencies:
       '@noble/hashes':
@@ -1085,6 +1091,11 @@ packages:
       kerberos:
         optional: true
 
+  mise@2026.10.3:
+    resolution: {integrity: sha512-DMJAAwNZQ45sr3Z4OlRQYNZk4OX+osVterL56cq08UuFWttT08EB2/SVGcaZidl3UEOaeVfVn1RMwiOstVyguA==}
+    engines: {node: '>=5.0.0'}
+    hasBin: true
+
   mrmime@2.0.1:
     resolution: {integrity: sha512-Y3wQdFg2Va6etvQ5I82yUhGdsKrcYox6p7FfL1LbK2J4V01F9TGlepTIhnK24t7koZibmg82KGglhA1XK5IsLQ==}
     engines: {node: '>=10'}
@@ -2123,6 +2134,8 @@ snapshots:
       - '@types/node'
       - bufferutil
       - utf-8-validate
+
+  mise@2026.10.3: {}
 
   mrmime@2.0.1: {}
 

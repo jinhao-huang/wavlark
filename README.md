@@ -64,32 +64,17 @@ within five minutes.
 
 ## Deploy to production
 
-### Deploy the Workers
+### Import the GitHub repository
 
-Prepare these resources in the same Cloudflare account. Reuse them if they already exist.
+Push the project to `main` on GitHub. In one Cloudflare account, create a D1 database named `wavlark` and a private R2 bucket. Use the `bucket_name` of the `FILES` binding in the [API Wrangler configuration](api/wrangler.jsonc). Activate R2 if prompted and use the default bucket location and jurisdiction. The API's first deployment applies migrations to this database.
 
-- In [D1 SQL Database](https://dash.cloudflare.com/?to=/:account/workers/d1), select **Create Database**, name it `wavlark`, and use automatic placement. Wrangler finds it by name.
-- In [R2 Object Storage](https://dash.cloudflare.com/?to=/:account/r2/overview), activate R2 if prompted. Select **Create bucket**, name it `wavlark-files`, and use automatic location with no jurisdiction restriction. Keep the **Standard** storage class and leave public access disabled. Dedicate this bucket to the library.
+Before importing the API, open **My Profile → API Tokens → Create Token**. Start with the **Edit Cloudflare Workers** template, select the deployment account and add **Account → D1 → Edit** for migrations. [Workers Builds token permissions](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/#api-token)
 
-When upgrading from 8 MiB parts, pause new uploads and publish any multipart drafts
-you want to keep. Once the remaining multipart drafts expire, deploy and refresh any open management pages.
+1. Go to **Workers & Pages → Create application → GitHub**. Authorize the Cloudflare GitHub app for the repository and select it.
+2. Create **wavlark-api** with **Root directory** set to `api`. Enter `pnpm run build` for **Build command** and `pnpm run deploy` for **Deploy command**. Select production branch `main`, disable preview builds, and leave build variables empty. Select your user API token in the build settings, then select **Save and Deploy**.
+3. After the API deployment succeeds, import the same repository as **wavlark-web** with **Root directory** set to `web`. Use the same commands and branch settings, and the default build token. The Web Worker's `API` binding needs the deployed API. Register a `workers.dev` subdomain if prompted. Open the Web production URL and check that `/api/health` returns `{"status":"ok"}` and the homepage shows an empty catalog.
 
-After local setup, sign in to that account and deploy from the repository root.
-If Wrangler asks to register a `workers.dev` subdomain, choose **Yes** and enter an available name for the account.
-
-```sh
-mise exec -- pnpm exec wrangler login
-mise run deploy
-```
-
-The task applies pending production D1 migrations without a prompt, deploys the
-Rust API Worker (`wavlark-api`), then builds and deploys the Web Worker (`wavlark-web`).
-Wrangler creates each Worker on its first deployment. A failed step stops the
-release. Earlier successful steps remain in effect.
-
-After the command succeeds, both Workers appear under **Workers & Pages**.
-Use the production URL printed for `wavlark-web` in the settings below, or attach
-your own domain first.
+Each push to `main` triggers two independent deployments. The API compiles Rust, applies pending D1 migrations, then publishes. A failed migration stops publication. Applied migrations remain in effect if publication fails. When the Web needs a new API, push the API change first and wait for its deployment before pushing the Web change. [Workers Builds monorepo setup](https://developers.cloudflare.com/workers/ci-cd/builds/advanced-setups/)
 
 ### Use a custom domain (optional)
 
@@ -99,21 +84,10 @@ Enter just the hostname, for example `files.example.com`. Under **Enable for**,
 select **Production**, then click **Add domain**. Once the homepage opens at
 `https://files.example.com`, use that address for the steps below.
 
-If you already manage files on `workers.dev`, add the new HTTPS origin to
-`AllowedOrigins` in the existing R2 CORS policy. In the existing Access
-application, add the new hostname for both `manage` and `api/manage`. Verify
-sign-in and upload on the new domain before removing the old origin and Access
-entries. Keep both sets of entries if you want to manage files from either address.
-
 ### Allow browser uploads
 
-Open **R2 Object Storage → wavlark-files → Settings → CORS Policy**. Choose
-**Add CORS policy** (or edit the existing policy) and open the **JSON** tab.
-For a new policy, paste the rule below. If this rule already exists, add the origin to its
-`AllowedOrigins` array and include `ETag` in `ExposeHeaders` so the browser can confirm each part. Replace `https://files.example.com` with the origin of
-your management page, then select **Save**. For example, if you open
-`https://wavlark-web.my-team.workers.dev/manage`, enter
-`https://wavlark-web.my-team.workers.dev` with no path or trailing slash.
+Select the bucket in **R2 Object Storage**, then open **Settings → CORS Policy → Add CORS policy**.
+In the **JSON** tab, paste the rule below and replace `https://files.example.com` with the origin where administrators open the Web Worker. For example, for `https://wavlark-web.my-team.workers.dev/manage`, enter `https://wavlark-web.my-team.workers.dev`. Select **Save**. Exposing `ETag` lets the browser confirm each multipart upload part.
 [Cloudflare R2 CORS settings](https://developers.cloudflare.com/r2/buckets/cors/#add-cors-policies-from-the-dashboard)
 
 ```json
@@ -145,14 +119,13 @@ Enable the chosen login method for this application and save it.
 ### Set the API variables and secrets
 
 Open the [R2 API Tokens page](https://dash.cloudflare.com/?to=/:account/r2/api-tokens)
-in the account that owns `wavlark-files`. Select **Create Account API token**,
-choose **Object Read & Write**, and limit access to `wavlark-files`. After
+in the account that owns the bucket. Select **Create Account API token**,
+choose **Object Read & Write**, and limit access to that bucket. After
 creating the token, copy the **Access Key ID** and **Secret Access Key**.
 The secret access key is shown only once.
 
 Open **Workers & Pages → wavlark-api → Settings → Variables and Secrets**.
-Select **Add**. For all five entries, select **Production** only and set
-**Secret** as shown below. Select **Deploy** to apply the settings. Subsequent releases preserve them.
+Wrangler sets `R2_BUCKET_NAME` from the repository. Add the five account-specific settings below to **Production** and select **Deploy**. Wrangler preserves dashboard variables with `keep_vars` and retains secrets across code deployments.
 
 | Name | Secret | Value |
 | --- | --- | --- |

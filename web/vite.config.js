@@ -35,7 +35,7 @@ const localApi = {
     const api = globalThis.wavlarkDevApi ??= await startWorker({
       config: '../api/wrangler.jsonc',
       bindings,
-      build: { custom: { workingDirectory: '../api' } },
+      build: { custom: { command: 'pnpm run build', workingDirectory: '../api', watch: '../api/src' } },
       dev: {
         server: { hostname: '127.0.0.1', port: 0 },
         registry,

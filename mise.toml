@@ -20,13 +20,4 @@ run = [
 
 [tasks.test]
 dir = "api"
-run = ["pnpm --dir ../web run build", "node --test tests/*.test.mjs"]
-
-[tasks.deploy]
-description = "Migrate production D1 and deploy the API and Web Workers"
-run = [
-  "pnpm exec wrangler d1 migrations apply DB --cwd api --remote --force",
-  "pnpm exec wrangler deploy --cwd api",
-  "pnpm --dir web run build",
-  "pnpm --dir web exec wrangler deploy",
-]
+run = ["pnpm run build", "pnpm --dir ../web run build", "node --test tests/*.test.mjs"]

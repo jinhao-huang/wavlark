@@ -1,0 +1,11 @@
+{
+  "name": "@wavlark/api",
+  "private": true,
+  "scripts": {
+    "build": "mise exec -- worker-build --release",
+    "deploy": "wrangler d1 migrations apply DB --remote --force && wrangler deploy"
+  },
+  "devDependencies": {
+    "mise": "2026.10.3"
+  }
+}

@@ -34,35 +34,25 @@ mise run dev
 
 ## 部署到生产环境
 
-### 部署 Worker
+### 从 GitHub 创建两个 Worker
 
-在同一 Cloudflare 账户下准备以下资源。已有符合条件的同名资源可直接使用。
+把项目推送到 GitHub 的 `main` 分支。在同一个 Cloudflare 账户下创建 D1 数据库 `wavlark` 和一个私有 R2 桶。桶名填写 [API 的 Wrangler 配置](api/wrangler.jsonc) 中 `FILES` 绑定的 `bucket_name`。首次使用 R2 时按提示开通，桶的位置和司法辖区保留默认设置。API 首次部署时会在这个数据库中建表。
 
-- 打开 [D1 SQL Database](https://dash.cloudflare.com/?to=/:account/workers/d1)，点 **Create Database**，名称填 `wavlark`，位置由 Cloudflare 自动选择。Wrangler 会按名称查找数据库。
-- 打开 [R2 Object Storage](https://dash.cloudflare.com/?to=/:account/r2/overview)，如提示开通 R2，先完成开通。点 **Create bucket**，名称填 `wavlark-files`，位置选自动，不指定司法辖区。存储类别保留 **Standard**，公开访问保持关闭，桶由本站独占。
+导入 API 前，打开 **My Profile → API Tokens → Create Token**，用 **Edit Cloudflare Workers** 模板创建用户令牌，选定部署账户，再添加 **Account → D1 → Edit** 权限，供数据库迁移使用。[Workers Builds 令牌权限](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/#api-token)
 
-从 8 MiB 分片升级时，请暂停新上传，把需要保留的分片草稿传完并发布。等其余分片草稿过期后即可部署，再刷新已打开的管理页面。
+1. 打开 **Workers & Pages → Create application → GitHub**，授权 Cloudflare GitHub 应用访问项目仓库，然后选中该仓库。
+2. 创建 **wavlark-api**，**Root directory** 填 `api`，**Build command** 填 `pnpm run build`，**Deploy command** 填 `pnpm run deploy`。生产分支选 `main`，关闭预览构建，构建变量留空。在构建设置中选择刚创建的用户令牌，点击 **Save and Deploy**。
+3. 等 API 部署成功，再从同一仓库创建 **wavlark-web**。**Root directory** 填 `web`，构建命令、部署命令和分支设置与 API 相同，构建令牌可用默认值。Web 的 `API` 服务绑定依赖已部署的 API。如提示注册 `workers.dev` 子域名，按提示完成。打开 Web 的生产网址，确认 `/api/health` 返回 `{"status":"ok"}`，首页显示空目录。
 
-完成本地初始化后，在仓库根目录登录该账户并部署。如果 Wrangler 提示注册 `workers.dev` 子域，选 **Yes**，为账户填一个可用的子域名。
-
-```sh
-mise exec -- pnpm exec wrangler login
-mise run deploy
-```
-
-命令先执行待应用的生产 D1 迁移（跳过确认提示），再部署 Rust API Worker（`wavlark-api`），最后构建并部署 Web Worker（`wavlark-web`）。Wrangler 会在首次部署时自动创建这两个 Worker。任一步失败，后续步骤就会停止，之前成功的步骤仍然生效。
-
-命令成功后，在 Cloudflare 控制台的 **Workers & Pages** 中可以看到这两个 Worker。下面的配置可以直接使用 `wavlark-web` 部署时输出的正式网址，也可以先绑定自己的域名。
+此后每次推送到 `main`，两个 Worker 都会独立部署。API 先编译 Rust，再执行待应用的 D1 迁移，最后发布。迁移失败会停止发布。如果发布失败，已成功执行的迁移仍然生效。网页需要新接口时，先推送 API 改动，等它上线后再推送网页改动。[Workers Builds 多项目仓库配置](https://developers.cloudflare.com/workers/ci-cd/builds/advanced-setups/)
 
 ### 绑定自定义域名（可选）
 
 只给 `wavlark-web` 绑定域名。在同一 Cloudflare 账户下，为已激活的域名选一个尚未使用的主机名，例如 `files.example.com`。打开 **Workers & Pages → wavlark-web → Domains → Custom Domains and Routes → Add Domain**，填入主机名，在 **Enable for** 选 **Production**，然后点 **Add domain**。确认 `https://files.example.com` 能打开首页后，用这个网址完成下面的配置。
 
-如果此前已通过 `workers.dev` 管理文件，在现有 R2 CORS 策略的 `AllowedOrigins` 中加上新域名的 HTTPS 地址，再到原来的 Access 应用中为新域名添加 `manage` 和 `api/manage` 两条路径。确认新域名能登录和上传后，即可移除旧网址对应的 CORS 和 Access 条目。如果两个网址都要用于管理，就保留两组配置。
-
 ### 允许浏览器上传
 
-打开 **R2 Object Storage → wavlark-files → Settings → CORS Policy**，选择 **Add CORS policy**（已有策略则编辑），切到 **JSON**。新建时粘贴下面的规则。已有这条规则时，在 `AllowedOrigins` 中追加新来源，并确保 `ExposeHeaders` 包含 `ETag`，以便浏览器确认每一片上传成功。把示例中的 `https://files.example.com` 换成管理页的协议和域名，末尾不加斜杠，然后点 **Save**。例如，管理页是 `https://wavlark-web.my-team.workers.dev/manage`，这里就填 `https://wavlark-web.my-team.workers.dev`。[Cloudflare R2 控制台说明](https://developers.cloudflare.com/r2/buckets/cors/#add-cors-policies-from-the-dashboard)
+在 **R2 Object Storage** 中选择刚创建的桶，打开 **Settings → CORS Policy → Add CORS policy**，在 **JSON** 页签粘贴下面的规则。把 `https://files.example.com` 换成管理页的协议和域名，然后点 **Save**。例如，管理页是 `https://wavlark-web.my-team.workers.dev/manage`，这里就填 `https://wavlark-web.my-team.workers.dev`。浏览器需要读取 `ETag` 来确认每个分片上传成功。[Cloudflare R2 控制台说明](https://developers.cloudflare.com/r2/buckets/cors/#add-cors-policies-from-the-dashboard)
 
 ```json
 [
@@ -83,9 +73,9 @@ mise run deploy
 
 ### 配置 API 变量和密钥
 
-打开 [R2 API Tokens 页面](https://dash.cloudflare.com/?to=/:account/r2/api-tokens)，选择 `wavlark-files` 所在的账户。点 **Create Account API token**，权限选 **Object Read & Write**，范围只选 `wavlark-files`。创建后复制 **Access Key ID** 和 **Secret Access Key**，后者只显示这一次。
+打开 [R2 API Tokens 页面](https://dash.cloudflare.com/?to=/:account/r2/api-tokens)，选择桶所在的账户。点 **Create Account API token**，权限选 **Object Read & Write**，范围只选这个桶。创建后复制 **Access Key ID** 和 **Secret Access Key**，后者只显示这一次。
 
-打开 **Workers & Pages → wavlark-api → Settings → Variables and Secrets**，点 **Add**。下表五项的环境都只选 **Production**，**Secret** 按表中标注设置。填好后点 **Deploy**，后续发布会保留这些设置。
+打开 **Workers & Pages → wavlark-api → Settings → Variables and Secrets**。Wrangler 会从仓库配置设置 `R2_BUCKET_NAME`。在 **Production** 中填好下表五项账户配置，点 **Deploy**。后续代码发布时，Wrangler 会通过 `keep_vars` 保留控制台里的普通变量，密钥也会保留。
 
 | 名称 | 勾选 Secret | 填写内容 |
 | --- | --- | --- |

@@ -1,9 +1,10 @@
 {
   "name": "wavlark",
   "private": true,
+  "packageManager": "pnpm@11.20.0",
   "scripts": {
     "dev": "pnpm --dir web exec vite dev",
-    "build": "wrangler deploy --cwd api --dry-run && pnpm --dir web run build && pnpm --dir web exec wrangler deploy --dry-run"
+    "build": "pnpm --dir api run build && wrangler deploy --cwd api --dry-run && pnpm --dir web run build && wrangler deploy --cwd web --dry-run"
   },
   "devDependencies": {
     "wrangler": "^4.166.0"
