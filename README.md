@@ -68,11 +68,27 @@ within five minutes.
 
 Push the project to `main` on GitHub. In one Cloudflare account, create a D1 database named `wavlark` and a private R2 bucket. Use the `bucket_name` of the `FILES` binding in the [API Wrangler configuration](api/wrangler.jsonc). Activate R2 if prompted and use the default bucket location and jurisdiction. The API's first deployment applies migrations to this database.
 
-Before importing the API, open **My Profile → API Tokens → Create Token**. Start with the **Edit Cloudflare Workers** template, select the deployment account and add **Account → D1 → Edit** for migrations. [Workers Builds token permissions](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/#api-token)
+In **Workers & Pages → Create application → GitHub**, authorize the Cloudflare GitHub app and select the repository. Create `wavlark-api` first. Once it deploys, import the same repository for `wavlark-web`, whose `API` service binding points to the deployed API.
 
-1. Go to **Workers & Pages → Create application → GitHub**. Authorize the Cloudflare GitHub app for the repository and select it.
-2. Create **wavlark-api** with **Root directory** set to `api`. Enter `pnpm run build` for **Build command** and `pnpm run deploy` for **Deploy command**. Select production branch `main`, disable preview builds, and leave build variables empty. Select your user API token in the build settings, then select **Save and Deploy**.
-3. After the API deployment succeeds, import the same repository as **wavlark-web** with **Root directory** set to `web`. Use the same commands and branch settings, and the default build token. The Web Worker's `API` binding needs the deployed API. Register a `workers.dev` subdomain if prompted. Open the Web production URL and check that `/api/health` returns `{"status":"ok"}` and the homepage shows an empty catalog.
+| Creation form | `wavlark-api` | `wavlark-web` |
+| --- | --- | --- |
+| Production branch | `main` | `main` |
+| Build command | `pnpm run build` | `pnpm run build` |
+| Deploy command | `pnpm run deploy` | `pnpm run deploy` |
+| Preview command | Keep `npx wrangler preview` | Keep `npx wrangler preview` |
+| Enable Preview builds | Off | Off |
+| Protect with Cloudflare Access | Off | Off |
+| Advanced settings → Path | `/api/` | `/web/` |
+| API Token | **Create new token** or select one from the dropdown | **Create new token** or select one from the dropdown |
+| Variable name / Variable value | Leave empty | Leave empty |
+
+Workers Builds uses the selected **API Token** to deploy the Worker. Both Workers use **Workers Scripts (edit)**. The API also needs **D1 Storage (edit)** to apply database migrations. If **Create new token** lists both permissions, proceed with the defaults. You can reuse the same token for both Workers if it appears in both dropdowns and has the required permissions on the deployment account. If it lacks only D1 access, enable **Developer Platform → D1 → Edit** on that token under **My Profile → API Tokens** before deploying the API.
+
+**Path** is relative to the repository root. With preview builds off, pushes to other branches skip the Preview command. Keep the catalog public and [configure Access for the management paths](#configure-administrator-access) after deployment.
+
+Variables on the Git build form are available to build commands. Wavlark reads its Access settings and R2 credentials when handling requests. [Set the API variables and secrets](#set-the-api-variables-and-secrets) on the production API Worker after deployment.
+
+Register a `workers.dev` subdomain if prompted. Open the Web production URL and check that `/api/health` returns `{"status":"ok"}` and the homepage shows an empty catalog.
 
 Each push to `main` triggers two independent deployments. The API compiles Rust, applies pending D1 migrations, then publishes. A failed migration stops publication. Applied migrations remain in effect if publication fails. When the Web needs a new API, push the API change first and wait for its deployment before pushing the Web change. [Workers Builds monorepo setup](https://developers.cloudflare.com/workers/ci-cd/builds/advanced-setups/)
 
@@ -118,7 +134,7 @@ Enable the chosen login method for this application and save it.
 
 ### Set the API variables and secrets
 
-Open the [R2 API Tokens page](https://dash.cloudflare.com/?to=/:account/r2/api-tokens)
+The API uses separate R2 credentials to sign upload and download URLs. Open the [R2 API Tokens page](https://dash.cloudflare.com/?to=/:account/r2/api-tokens)
 in the account that owns the bucket. Select **Create Account API token**,
 choose **Object Read & Write**, and limit access to that bucket. After
 creating the token, copy the **Access Key ID** and **Secret Access Key**.

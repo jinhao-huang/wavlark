@@ -38,11 +38,27 @@ mise run dev
 
 把项目推送到 GitHub 的 `main` 分支。在同一个 Cloudflare 账户下创建 D1 数据库 `wavlark` 和一个私有 R2 桶。桶名填写 [API 的 Wrangler 配置](api/wrangler.jsonc) 中 `FILES` 绑定的 `bucket_name`。首次使用 R2 时按提示开通，桶的位置和司法辖区保留默认设置。API 首次部署时会在这个数据库中建表。
 
-导入 API 前，打开 **My Profile → API Tokens → Create Token**，用 **Edit Cloudflare Workers** 模板创建用户令牌，选定部署账户，再添加 **Account → D1 → Edit** 权限，供数据库迁移使用。[Workers Builds 令牌权限](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/#api-token)
+打开 **Workers & Pages → Create application → GitHub**，授权 Cloudflare GitHub 应用访问项目仓库并选中它。先创建 `wavlark-api`，等部署成功后，再从同一仓库创建 `wavlark-web`。Web 的 `API` 服务绑定需要用到已部署的 API。
 
-1. 打开 **Workers & Pages → Create application → GitHub**，授权 Cloudflare GitHub 应用访问项目仓库，然后选中该仓库。
-2. 创建 **wavlark-api**，**Root directory** 填 `api`，**Build command** 填 `pnpm run build`，**Deploy command** 填 `pnpm run deploy`。生产分支选 `main`，关闭预览构建，构建变量留空。在构建设置中选择刚创建的用户令牌，点击 **Save and Deploy**。
-3. 等 API 部署成功，再从同一仓库创建 **wavlark-web**。**Root directory** 填 `web`，构建命令、部署命令和分支设置与 API 相同，构建令牌可用默认值。Web 的 `API` 服务绑定依赖已部署的 API。如提示注册 `workers.dev` 子域名，按提示完成。打开 Web 的生产网址，确认 `/api/health` 返回 `{"status":"ok"}`，首页显示空目录。
+| 创建页字段 | `wavlark-api` | `wavlark-web` |
+| --- | --- | --- |
+| Production branch | `main` | `main` |
+| Build command | `pnpm run build` | `pnpm run build` |
+| Deploy command | `pnpm run deploy` | `pnpm run deploy` |
+| Preview command | 保留 `npx wrangler preview` | 保留 `npx wrangler preview` |
+| Enable Preview builds | 关闭 | 关闭 |
+| Protect with Cloudflare Access | 关闭 | 关闭 |
+| Advanced settings → Path | `/api/` | `/web/` |
+| API Token | 选 **Create new token** 或从下拉框选已有令牌 | 选 **Create new token** 或从下拉框选已有令牌 |
+| Variable name / Variable value | 留空 | 留空 |
+
+Workers Builds 使用所选的 **API Token** 部署 Worker。两个 Worker 都用到 **Workers Scripts (edit)**，API 还需要 **D1 Storage (edit)** 来执行数据库迁移。如果 **Create new token** 列出了这两项，保留默认权限即可。已有令牌只要出现在两个下拉框中，且对部署账户具备所需权限，就可以给两个 Worker 选同一枚。如果要复用的令牌只缺 D1 权限，部署 API 前到 **My Profile → API Tokens** 编辑这枚令牌，在 **Developer Platform → D1** 下勾选 **Edit**。
+
+**Path** 从仓库根目录算起。关闭预览构建后，推送到其他分支会跳过 Preview command。文件目录对外公开，部署后只为管理路径[配置管理员登录](#配置管理员登录)。
+
+Git 构建表单里的变量供构建命令使用。Wavlark 在处理请求时才读取 Access 配置和 R2 凭据，部署后按[配置 API 变量和密钥](#配置-api-变量和密钥)填到生产 API Worker 中。
+
+如提示注册 `workers.dev` 子域名，按提示完成。打开 Web 的生产网址，确认 `/api/health` 返回 `{"status":"ok"}`，首页显示空目录。
 
 此后每次推送到 `main`，两个 Worker 都会独立部署。API 先编译 Rust，再执行待应用的 D1 迁移，最后发布。迁移失败会停止发布。如果发布失败，已成功执行的迁移仍然生效。网页需要新接口时，先推送 API 改动，等它上线后再推送网页改动。[Workers Builds 多项目仓库配置](https://developers.cloudflare.com/workers/ci-cd/builds/advanced-setups/)
 
@@ -73,7 +89,7 @@ mise run dev
 
 ### 配置 API 变量和密钥
 
-打开 [R2 API Tokens 页面](https://dash.cloudflare.com/?to=/:account/r2/api-tokens)，选择桶所在的账户。点 **Create Account API token**，权限选 **Object Read & Write**，范围只选这个桶。创建后复制 **Access Key ID** 和 **Secret Access Key**，后者只显示这一次。
+API 使用单独的 R2 凭据为上传和下载链接签名。打开 [R2 API Tokens 页面](https://dash.cloudflare.com/?to=/:account/r2/api-tokens)，选择桶所在的账户。点 **Create Account API token**，权限选 **Object Read & Write**，范围只选这个桶。创建后复制 **Access Key ID** 和 **Secret Access Key**，后者只显示这一次。
 
 打开 **Workers & Pages → wavlark-api → Settings → Variables and Secrets**。Wrangler 会从仓库配置设置 `R2_BUCKET_NAME`。在 **Production** 中填好下表五项账户配置，点 **Deploy**。后续代码发布时，Wrangler 会通过 `keep_vars` 保留控制台里的普通变量，密钥也会保留。
 
